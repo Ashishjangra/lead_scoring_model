@@ -114,7 +114,7 @@ def test_root_endpoint():
     """Test root endpoint"""
     response = client.get("/")
     assert response.status_code == 200
-    
+
     data = response.json()
     assert "service" in data
     assert "version" in data
