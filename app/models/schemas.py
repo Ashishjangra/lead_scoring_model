@@ -52,7 +52,9 @@ class LeadFeatures(BaseModel):
     )
 
     @validator("custom_features")
-    def validate_custom_features(cls, v):
+    def validate_custom_features(
+        cls, v: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
         if v and len(v) > 40:  # Limit custom features
             raise ValueError("Too many custom features provided")
         return v
@@ -65,11 +67,11 @@ class ScoreRequest(BaseModel):
         default_factory=lambda: str(uuid.uuid4()), description="Unique request ID"
     )
     leads: list[LeadFeatures] = Field(
-        ..., min_items=1, max_items=100, description="List of leads to score"
+        ..., min_length=1, max_length=100, description="List of leads to score"
     )
 
     @validator("leads")
-    def validate_leads(cls, v):
+    def validate_leads(cls, v: list[LeadFeatures]) -> list[LeadFeatures]:
         if len(v) > 100:
             raise ValueError("Maximum 100 leads per request")
         return v

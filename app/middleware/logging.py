@@ -1,6 +1,7 @@
 import time
 import uuid
 from collections.abc import Callable
+from typing import Any
 
 import structlog
 from fastapi import Request, Response
@@ -12,7 +13,9 @@ logger = structlog.get_logger()
 class LoggingMiddleware(BaseHTTPMiddleware):
     """Structured logging middleware for request/response tracking"""
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[..., Any]
+    ) -> Response:
         # Generate request ID
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
@@ -32,7 +35,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         try:
             # Process request
-            response = await call_next(request)
+            response: Response = await call_next(request)
 
             # Calculate duration
             duration = time.time() - start_time

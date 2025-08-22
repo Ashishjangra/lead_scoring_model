@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import awswrangler as wr
-import boto3
+import boto3  # type: ignore[import-untyped]
 import pandas as pd
 import structlog
 
@@ -32,7 +32,7 @@ logger = structlog.get_logger()
 class DataLakeWriter:
     """Async data lake writer using AWS Wrangler for Parquet format"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.executor = ThreadPoolExecutor(max_workers=DATA_LAKE_THREAD_WORKERS)
 
     async def write_predictions_async(
@@ -148,7 +148,7 @@ class DataLakeWriter:
             dataset=True,
             database=DATA_LAKE_DATABASE,
             table=DATA_LAKE_TABLE_NAME,
-            mode=DATA_LAKE_WRITE_MODE,
+            mode=DATA_LAKE_WRITE_MODE,  # type: ignore
             index=False,
             partition_cols=DATA_LAKE_PARTITION_COLUMNS,
             boto3_session=boto3_session,

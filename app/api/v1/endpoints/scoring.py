@@ -12,7 +12,7 @@ logger = structlog.get_logger()
 router = APIRouter()
 
 
-async def validate_request_size(request: Request):
+async def validate_request_size(request: Request) -> None:
     """Validate request size to prevent DoS"""
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > 10 * 1024 * 1024:  # 10MB limit
@@ -25,7 +25,7 @@ async def score_leads(
     request: Request,
     background_tasks: BackgroundTasks,
     _: None = Depends(validate_request_size),
-):
+) -> ScoreResponse:
     """Score leads using the ML model"""
     start_time = time.time()
     request_id = getattr(request.state, "request_id", score_request.request_id)
@@ -95,7 +95,7 @@ async def score_leads(
 
 
 @router.get("/model/info")
-async def get_model_info():
+async def get_model_info() -> JSONResponse:
     """Get information about the loaded model"""
     try:
         info = predictor.get_model_info()

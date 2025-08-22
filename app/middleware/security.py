@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Any
 
 import structlog
 from fastapi import HTTPException, Request, Response, status
@@ -14,8 +15,10 @@ logger = structlog.get_logger()
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to all responses"""
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        response = await call_next(request)
+    async def dispatch(
+        self, request: Request, call_next: Callable[..., Any]
+    ) -> Response:
+        response: Response = await call_next(request)
 
         # Security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -45,7 +48,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 security = HTTPBearer()
 
 
-async def verify_api_key(credentials: HTTPAuthorizationCredentials = None):
+async def verify_api_key(
+    credentials: HTTPAuthorizationCredentials | None = None,
+) -> None:
     """Verify API key for protected endpoints"""
     if not credentials:
         raise HTTPException(
@@ -66,4 +71,4 @@ async def verify_api_key(credentials: HTTPAuthorizationCredentials = None):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return credentials.credentials
+    # API key is valid, no return needed

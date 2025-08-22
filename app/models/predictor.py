@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 import numpy as np
 import pandas as pd
 import structlog
@@ -34,16 +34,16 @@ logger = structlog.get_logger()
 class LeadScoringPredictor:
     """Production lead scoring model predictor with performance optimizations"""
 
-    def __init__(self):
-        self.model = None
-        self.feature_columns = None
+    def __init__(self) -> None:
+        self.model: Any = None
+        self.feature_columns: list[str] | None = None
         self.model_version = "1.0.0"
         self.executor = ThreadPoolExecutor(max_workers=THREAD_POOL_MAX_WORKERS)
-        self._model_cache = {}
-        self._feature_cache = {}
+        self._model_cache: dict[str, Any] = {}
+        self._feature_cache: dict[str, Any] = {}
         self._load_model()
 
-    def _load_model(self):
+    def _load_model(self) -> None:
         """Load the XGBoost model from local file or S3"""
         try:
             if settings.model_bucket and settings.model_key:
@@ -63,7 +63,7 @@ class LeadScoringPredictor:
             logger.error("Failed to load model", error=str(e))
             self._load_mock_model()
 
-    def _load_from_s3(self):
+    def _load_from_s3(self) -> None:
         """Load model from S3"""
         s3 = boto3.client("s3", region_name=settings.aws_region)
         local_path = MODEL_TEMP_PATH
@@ -78,7 +78,7 @@ class LeadScoringPredictor:
         self.feature_columns = model_data["feature_columns"]
         self.model_version = model_data.get("version", "1.0.0")
 
-    def _load_from_file(self):
+    def _load_from_file(self) -> None:
         """Load model from local file"""
         if Path(settings.model_path).exists():
             with open(settings.model_path, "rb") as f:
@@ -90,7 +90,7 @@ class LeadScoringPredictor:
         else:
             raise FileNotFoundError(f"Model file not found: {settings.model_path}")
 
-    def _load_mock_model(self):
+    def _load_mock_model(self) -> None:
         """Load a mock model for development/testing"""
         logger.warning("Loading mock model for development")
 
@@ -117,7 +117,7 @@ class LeadScoringPredictor:
         ]  # 50 total features
 
         # Create a simple mock XGBoost model
-        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.ensemble import RandomForestClassifier  # type: ignore[import-untyped]
 
         self.model = RandomForestClassifier(
             n_estimators=RANDOM_FOREST_ESTIMATORS,
@@ -125,9 +125,10 @@ class LeadScoringPredictor:
         )
 
         # Train on dummy data
-        X_dummy = np.random.rand(100, len(self.feature_columns))
-        y_dummy = np.random.randint(1, 6, 100)
-        self.model.fit(X_dummy, y_dummy)
+        if self.feature_columns:
+            X_dummy = np.random.rand(100, len(self.feature_columns))
+            y_dummy = np.random.randint(1, 6, 100)
+            self.model.fit(X_dummy, y_dummy)
 
         self.model_version = "mock-1.0.0"
 
@@ -208,13 +209,14 @@ class LeadScoringPredictor:
         df = pd.DataFrame(data)
 
         # Ensure all required columns are present
-        for col in self.feature_columns:
-            if col not in df.columns:
-                df[col] = 0.0
+        if self.feature_columns:
+            for col in self.feature_columns:
+                if col not in df.columns:
+                    df[col] = 0.0
+            return df[self.feature_columns]
+        return df
 
-        return df[self.feature_columns]
-
-    def _encode_categorical(self, value: str, categories: list[str]) -> int:
+    def _encode_categorical(self, value: str | None, categories: list[str]) -> int:
         """Simple categorical encoding"""
         if not value:
             return 0
@@ -238,7 +240,7 @@ class LeadScoringPredictor:
             )
 
             # Calculate confidence scores (mock implementation)
-            if hasattr(self.model, "predict_proba"):
+            if self.model and hasattr(self.model, "predict_proba"):
                 probabilities = await loop.run_in_executor(
                     self.executor, self.model.predict_proba, X
                 )
@@ -258,7 +260,9 @@ class LeadScoringPredictor:
                 score = LeadScore(
                     score=int(pred),
                     confidence=float(conf),
-                    features_used=len(self.feature_columns),
+                    features_used=(
+                        len(self.feature_columns) if self.feature_columns else 0
+                    ),
                     prediction_time_ms=processing_time / len(predictions),
                 )
                 results.append(score)
@@ -276,14 +280,16 @@ class LeadScoringPredictor:
             logger.error("Prediction failed", error=str(e))
             raise
 
-    def _predict_sync(self, X: pd.DataFrame) -> np.ndarray:
+    def _predict_sync(self, X: pd.DataFrame) -> np.ndarray[Any, Any]:
         """Synchronous prediction method"""
+        if self.model is None:
+            raise ValueError("Model is not loaded")
         predictions = self.model.predict(X)
 
         # Ensure predictions are in range 1-5
         predictions = np.clip(predictions, 1, 5)
 
-        return predictions
+        return predictions  # type: ignore[no-any-return]
 
     def is_loaded(self) -> bool:
         """Check if model is loaded"""

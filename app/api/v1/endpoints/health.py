@@ -14,7 +14,7 @@ _start_time = time.time()
 
 
 @router.get("/health", response_model=HealthCheck)
-async def health_check():
+async def health_check() -> HealthCheck:
     """Health check endpoint"""
     uptime = time.time() - _start_time
     model_loaded = predictor.is_loaded()
@@ -30,7 +30,7 @@ async def health_check():
 
 
 @router.get("/health/ready")
-async def readiness_check():
+async def readiness_check() -> JSONResponse:
     """Readiness check for ECS Fargate"""
     if not predictor.is_loaded():
         return JSONResponse(
@@ -42,6 +42,6 @@ async def readiness_check():
 
 
 @router.get("/health/live")
-async def liveness_check():
+async def liveness_check() -> JSONResponse:
     """Liveness check for ECS Fargate"""
     return JSONResponse(content={"status": "alive"})

@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from typing import Any, AsyncGenerator
 
 import structlog
 from fastapi import FastAPI
@@ -33,7 +34,7 @@ logger = structlog.get_logger()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan management"""
     logger.info("Starting Lead Scoring API", version=settings.app_version)
 
@@ -75,7 +76,7 @@ app.include_router(api_router, prefix="/api/v1")
 
 # Root endpoint
 @app.get("/")
-async def root():
+async def root() -> dict[str, Any]:
     """Root endpoint"""
     return {
         "service": settings.app_name,
