@@ -188,7 +188,7 @@ jobs:
       run: |
         echo "🐳 Building and pushing Docker image to DEV..."
         
-        # Build and push with version tag to DEV repo
+        # Build and push with version and latest tags to DEV repo
         ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
         docker buildx build \
           --platform linux/amd64 \
@@ -240,12 +240,10 @@ jobs:
         docker buildx build \
           --platform linux/amd64 \
           --tag ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:$IMAGE_TAG \
-          --tag ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:latest \
           --push .
         
         echo "✅ PROD Image pushed successfully:"
         echo "• ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:$IMAGE_TAG"
-        echo "• ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:latest"
         
         # Output for deployment job
         echo "image=${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
@@ -320,7 +318,7 @@ jobs:
           --task-definition $(aws ecs describe-task-definition \
             --task-definition $ECS_TASK_DEFINITION \
             --query 'taskDefinition.taskDefinitionArn' \
-            --output text | sed 's/:.*/:latest/')
+            --output text | sed "s/:.*/:$IMAGE_TAG/")
         
         echo "✅ Production deployment initiated"
         
