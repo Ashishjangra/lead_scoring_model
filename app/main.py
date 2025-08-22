@@ -50,13 +50,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 # Create FastAPI app
+# Enable Swagger UI for dev and debug environments
+enable_docs = settings.env.lower() in ["dev", "debug"]
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="Production-ready lead scoring API using XGBoost",
     lifespan=lifespan,
-    docs_url="/docs" if settings.debug else None,
-    redoc_url="/redoc" if settings.debug else None,
+    docs_url="/docs" if enable_docs else None,
+    redoc_url="/redoc" if enable_docs else None,
 )
 
 # Add middleware

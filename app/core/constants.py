@@ -37,7 +37,17 @@ MAX_BATCH_SIZE_DEFAULT = 100
 
 # Environment Detection
 ENV_DEBUG = "debug"
+ENV_DEV = "dev"
 ENV_PROD = "prod"
+
+# Logging Configuration
+LOG_GROUP_NAME = "lead-scoring"
+LOG_STREAM_DEV = "dev"
+LOG_STREAM_PROD = "prod"
+LOG_FILE_PATH = "/tmp/lead-scoring.log"
+LOG_LEVEL_DEBUG = "DEBUG"
+LOG_LEVEL_INFO = "INFO"
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 # Performance Configuration
 PREDICTION_TIMEOUT_DEFAULT = 0.5  # seconds

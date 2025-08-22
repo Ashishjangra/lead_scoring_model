@@ -29,9 +29,9 @@ RUN uv sync --frozen --no-dev
 # Copy application code
 COPY app/ ./app/
 
-# Create directories for models and logs
-RUN mkdir -p /app/models /app/logs && \
-    chown -R appuser:appuser /app
+# Create directories for models, logs, and UV cache
+RUN mkdir -p /app/models /app/logs /home/appuser/.cache && \
+    chown -R appuser:appuser /app /home/appuser
 
 # Switch to non-root user
 USER appuser
