@@ -1,0 +1,346 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  AWS_REGION: eu-west-1
+  ECR_REPOSITORY_DEV: lead-scoring-api-dev
+  ECR_REPOSITORY_PROD: lead-scoring-api-prod
+  MIN_COVERAGE: 80
+  MAX_SECURITY_ISSUES: 0
+
+jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      coverage: ${{ steps.coverage.outputs.coverage }}
+      security-issues: ${{ steps.security.outputs.issues }}
+      quality-passed: ${{ steps.quality-check.outputs.passed }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+
+    - name: Install dependencies
+      run: |
+        uv sync --dev
+
+    - name: Generate version
+      id: version
+      run: |
+        if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          # Get latest tag and increment patch version
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          VERSION=$(echo $LATEST_TAG | sed 's/v//' | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
+          echo "version=v${VERSION}" >> $GITHUB_OUTPUT
+        else
+          # Use branch name with commit SHA for non-main branches
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          echo "version=${GITHUB_REF_NAME}-${COMMIT_SHA}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Run linting
+      run: |
+        echo "🔍 Running code quality checks..."
+        uv run black --check app/ tests/ --diff
+        uv run ruff check app/ tests/ --output-format=github
+        echo "✅ Linting passed"
+
+    - name: Run type checking
+      run: |
+        echo "🔍 Running type checking..."
+        uv run mypy app/ --show-error-codes
+        echo "✅ Type checking passed"
+
+    - name: Run security scan
+      id: security
+      run: |
+        echo "🔒 Running security scan..."
+        uv run bandit -r app/ -f json -o security-report.json
+        
+        # Count high/medium severity issues
+        ISSUES=$(jq '.results | length' security-report.json 2>/dev/null || echo "0")
+        echo "issues=${ISSUES}" >> $GITHUB_OUTPUT
+        echo "Found ${ISSUES} security issues"
+        
+        if [ "$ISSUES" -gt "${{ env.MAX_SECURITY_ISSUES }}" ]; then
+          echo "❌ Security scan failed: ${ISSUES} issues found (max: ${{ env.MAX_SECURITY_ISSUES }})"
+          exit 1
+        fi
+        echo "✅ Security scan passed"
+
+    - name: Run tests with coverage
+      id: coverage
+      run: |
+        echo "🧪 Running tests with coverage..."
+        uv run pytest tests/ -v \
+          --cov=app \
+          --cov-report=term-missing \
+          --cov-report=xml \
+          --cov-report=html \
+          --junitxml=pytest-results.xml
+        
+        # Extract coverage percentage
+        COVERAGE=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); print(f\"{float(root.attrib['line-rate']) * 100:.1f}\")")
+        echo "coverage=${COVERAGE}" >> $GITHUB_OUTPUT
+        echo "Code coverage: ${COVERAGE}%"
+        
+        if (( $(echo "${COVERAGE} < ${{ env.MIN_COVERAGE }}" | bc -l) )); then
+          echo "❌ Coverage failed: ${COVERAGE}% (required: ${{ env.MIN_COVERAGE }}%)"
+          exit 1
+        fi
+        echo "✅ Coverage passed: ${COVERAGE}%"
+
+    - name: Quality gate check
+      id: quality-check
+      run: |
+        echo "🎯 Quality Gates Summary:"
+        echo "• Coverage: ${{ steps.coverage.outputs.coverage }}% (min: ${{ env.MIN_COVERAGE }}%)"
+        echo "• Security Issues: ${{ steps.security.outputs.security-issues }} (max: ${{ env.MAX_SECURITY_ISSUES }})"
+        echo "• Linting: ✅ Passed"
+        echo "• Type Checking: ✅ Passed"
+        echo "passed=true" >> $GITHUB_OUTPUT
+        echo "🎉 All quality gates passed!"
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: |
+          pytest-results.xml
+          coverage.xml
+          htmlcov/
+          security-report.json
+        retention-days: 1
+
+
+  vulnerability-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  build-and-push-dev:
+    needs: [quality-gates, vulnerability-scan]
+    runs-on: ubuntu-latest
+    if: |
+      github.ref == 'refs/heads/develop' && 
+      needs.quality-gates.outputs.quality-passed == 'true'
+    permissions:
+      contents: write
+      id-token: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build, tag, and push to DEV ECR
+      env:
+        IMAGE_TAG: ${{ needs.quality-gates.outputs.version }}
+      run: |
+        echo "🐳 Building and pushing Docker image to DEV..."
+        
+        # Build and push with version tag to DEV repo
+        ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+        docker buildx build \
+          --platform linux/amd64 \
+          --tag ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_DEV }}:$IMAGE_TAG \
+          --tag ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_DEV }}:latest \
+          --push .
+        
+        echo "✅ DEV Image pushed successfully:"
+        echo "• ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_DEV }}:$IMAGE_TAG"
+        echo "• ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_DEV }}:latest"
+
+  build-and-push-prod:
+    needs: [quality-gates, vulnerability-scan]
+    runs-on: ubuntu-latest
+    if: |
+      github.ref == 'refs/heads/main' && 
+      needs.quality-gates.outputs.quality-passed == 'true'
+    permissions:
+      contents: write
+      id-token: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build, tag, and push to PROD ECR
+      env:
+        IMAGE_TAG: ${{ needs.quality-gates.outputs.version }}
+      run: |
+        echo "🐳 Building and pushing Docker image to PROD..."
+        
+        # Build and push with version tag to PROD repo
+        ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+        docker buildx build \
+          --platform linux/amd64 \
+          --tag ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:$IMAGE_TAG \
+          --tag ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:latest \
+          --push .
+        
+        echo "✅ PROD Image pushed successfully:"
+        echo "• ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:$IMAGE_TAG"
+        echo "• ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:latest"
+        
+        # Output for deployment job
+        echo "image=${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Create and push Git tag
+      env:
+        VERSION: ${{ needs.quality-gates.outputs.version }}
+      run: |
+        echo "🏷️ Creating Git tag: $VERSION"
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git tag -a $VERSION -m "Release $VERSION - Coverage: ${{ needs.quality-gates.outputs.coverage }}%"
+        git push origin $VERSION
+
+    - name: Scan image for vulnerabilities
+      env:
+        IMAGE_TAG: ${{ needs.quality-gates.outputs.version }}
+      run: |
+        echo "🔒 Scanning image for vulnerabilities..."
+        
+        # Wait for ECR scan to complete
+        aws ecr start-image-scan --repository-name ${{ env.ECR_REPOSITORY_PROD }} --image-id imageTag=$IMAGE_TAG || true
+        sleep 30
+        
+        # Check scan results
+        SCAN_RESULTS=$(aws ecr describe-image-scan-findings --repository-name ${{ env.ECR_REPOSITORY_PROD }} --image-id imageTag=$IMAGE_TAG --query 'imageScanFindings.findingCounts' --output json 2>/dev/null || echo '{}')
+        
+        CRITICAL=$(echo $SCAN_RESULTS | jq -r '.CRITICAL // 0')
+        HIGH=$(echo $SCAN_RESULTS | jq -r '.HIGH // 0')
+        
+        echo "Vulnerability scan results:"
+        echo "• Critical: $CRITICAL"
+        echo "• High: $HIGH"
+        
+        if [ "$CRITICAL" -gt "0" ] || [ "$HIGH" -gt "3" ]; then
+          echo "❌ Image vulnerability scan failed"
+          exit 1
+        fi
+        echo "✅ Image vulnerability scan passed"
+
+    - name: Generate SBOM
+      env:
+        IMAGE_TAG: ${{ needs.quality-gates.outputs.version }}
+      run: |
+        echo "📋 Generating Software Bill of Materials (SBOM)..."
+        ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+          anchore/syft:latest ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:$IMAGE_TAG \
+          -o spdx-json=sbom.spdx.json
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts-${{ needs.quality-gates.outputs.version }}
+        path: |
+          sbom.spdx.json
+        retention-days: 1
+
+  deploy-production:
+    needs: [build-and-push-prod]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Deploy to ECS
+      env:
+        ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+        IMAGE_TAG: ${{ needs.quality-gates.outputs.version }}
+        ECS_CLUSTER: lead-scoring-cluster
+        ECS_SERVICE: lead-scoring-service
+        ECS_TASK_DEFINITION: lead-scoring-task
+      run: |
+        echo "🚀 Deploying to production ECS..."
+        
+        # Update ECS service with new image
+        aws ecs update-service \
+          --cluster $ECS_CLUSTER \
+          --service $ECS_SERVICE \
+          --force-new-deployment \
+          --task-definition $(aws ecs describe-task-definition \
+            --task-definition $ECS_TASK_DEFINITION \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text | sed 's/:.*/:latest/')
+        
+        echo "✅ Production deployment initiated"
+        
+        # Wait for deployment to complete
+        aws ecs wait services-stable \
+          --cluster $ECS_CLUSTER \
+          --services $ECS_SERVICE
+        
+        echo "🎉 Production deployment completed successfully!"
