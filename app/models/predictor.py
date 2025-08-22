@@ -9,6 +9,7 @@ import boto3  # type: ignore[import-untyped]
 import numpy as np
 import pandas as pd
 import structlog
+from sklearn.ensemble import RandomForestClassifier  # type: ignore[import-untyped]
 
 from app.core.config import settings
 from app.core.constants import (
@@ -117,7 +118,6 @@ class LeadScoringPredictor:
         ]  # 50 total features
 
         # Create a simple mock XGBoost model
-        from sklearn.ensemble import RandomForestClassifier  # type: ignore[import-untyped]
 
         self.model = RandomForestClassifier(
             n_estimators=RANDOM_FOREST_ESTIMATORS,
