@@ -4,10 +4,10 @@ Contains paths, regions, buckets, and environment-specific settings.
 """
 
 # Model Configuration
-MODEL_PATH_DEFAULT = "/app/models/lead_scoring_model.pkl"
-MODEL_TEMP_PATH = "/tmp/model.pkl"
+MODEL_PATH_DEFAULT = "/app/models/lead_scoring_model.joblib"
+MODEL_TEMP_PATH = "/tmp/model.joblib"  # nosec B108 # Safe temp path for model files
 MODEL_S3_BUCKET = "ml-marketing-lead-scoring"
-MODEL_S3_KEY = "model/model.pkl"
+MODEL_S3_KEY = "model/model.joblib"
 
 # AWS Configuration
 AWS_REGION_DEFAULT = "eu-west-1"
@@ -34,13 +34,6 @@ MAX_LEADS_PER_REQUEST = 500
 MAX_BATCH_SIZE_DEFAULT = 100
 
 # Data Lake Configuration (AWS Wrangler writes directly, no buffering needed)
-
-# Categorical Feature Values
-COMPANY_SIZES = ["Small", "Medium", "Large", "Enterprise"]
-INDUSTRIES = ["Technology", "Healthcare", "Finance", "Manufacturing", "Other"]
-JOB_TITLES = ["Manager", "Director", "VP", "C-Level", "Individual"]
-SENIORITY_LEVELS = ["Junior", "Mid", "Senior", "Executive"]
-GEOGRAPHIES = ["North America", "Europe", "Asia Pacific", "Other"]
 
 # Environment Detection
 ENV_DEBUG = "debug"

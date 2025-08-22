@@ -11,12 +11,12 @@ class Settings(BaseSettings):
         return self.env.lower() == "debug"
 
     # Server settings
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # nosec B104 # Intentional for containerized deployment
     port: int = 8000
     workers: int = 4
 
     # Model settings
-    model_path: str = "/app/models/lead_scoring_model.pkl"
+    model_path: str = "/app/models/lead_scoring_model.joblib"
     model_bucket: str | None = None
     model_key: str | None = None
 

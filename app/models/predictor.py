@@ -1,11 +1,11 @@
 import asyncio
-import pickle
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
 import boto3  # type: ignore[import-untyped]
+import joblib  # type: ignore[import-untyped]
 import numpy as np
 import pandas as pd
 import structlog
@@ -13,18 +13,13 @@ from sklearn.ensemble import RandomForestClassifier  # type: ignore[import-untyp
 
 from app.core.config import settings
 from app.core.constants import (
-    COMPANY_SIZES,
     DEFAULT_DAYS_SINCE_INTERACTION,
-    GEOGRAPHIES,
-    INDUSTRIES,
-    JOB_TITLES,
     MOCK_CONFIDENCE_VALUE,
     MODEL_S3_BUCKET,
     MODEL_S3_KEY,
     MODEL_TEMP_PATH,
     RANDOM_FOREST_ESTIMATORS,
     RANDOM_FOREST_RANDOM_STATE,
-    SENIORITY_LEVELS,
     THREAD_POOL_MAX_WORKERS,
 )
 from app.models.schemas import LeadFeatures, LeadScore
@@ -39,6 +34,8 @@ class LeadScoringPredictor:
         self.model: Any = None
         self.feature_columns: list[str] | None = None
         self.model_version = "1.0.0"
+        self.parameters: dict[str, Any] | None = None
+        self.preprocessing_info: dict[str, Any] | None = None
         self.executor = ThreadPoolExecutor(max_workers=THREAD_POOL_MAX_WORKERS)
         self._model_cache: dict[str, Any] = {}
         self._feature_cache: dict[str, Any] = {}
@@ -72,22 +69,22 @@ class LeadScoringPredictor:
         key = MODEL_S3_KEY
         s3.download_file(bucket, key, local_path)
 
-        with open(local_path, "rb") as f:
-            model_data = pickle.load(f)
-
-        self.model = model_data["model"]
-        self.feature_columns = model_data["feature_columns"]
-        self.model_version = model_data.get("version", "1.0.0")
+        loaded_package = joblib.load(local_path)
+        self.model = loaded_package["model"]
+        self.parameters = loaded_package.get("parameters")
+        self.feature_columns = loaded_package.get("feature_names")
+        self.preprocessing_info = loaded_package.get("preprocessing")
+        self.model_version = loaded_package.get("version", "1.0.0")
 
     def _load_from_file(self) -> None:
         """Load model from local file"""
         if Path(settings.model_path).exists():
-            with open(settings.model_path, "rb") as f:
-                model_data = pickle.load(f)
-
-            self.model = model_data["model"]
-            self.feature_columns = model_data["feature_columns"]
-            self.model_version = model_data.get("version", "1.0.0")
+            loaded_package = joblib.load(settings.model_path)
+            self.model = loaded_package["model"]
+            self.parameters = loaded_package.get("parameters")
+            self.feature_columns = loaded_package.get("feature_names")
+            self.preprocessing_info = loaded_package.get("preprocessing")
+            self.model_version = loaded_package.get("version", "1.0.0")
         else:
             raise FileNotFoundError(f"Model file not found: {settings.model_path}")
 
@@ -117,8 +114,43 @@ class LeadScoringPredictor:
             f"custom_feature_{i}" for i in range(1, 35)
         ]  # 50 total features
 
-        # Create a simple mock XGBoost model
+        # Create mock preprocessing info with categorical mappings
+        self.preprocessing_info = {
+            "categorical_mappings": {
+                "company_size": ["Small", "Medium", "Large", "Enterprise"],
+                "industry": [
+                    "Technology",
+                    "Healthcare",
+                    "Finance",
+                    "Manufacturing",
+                    "Other",
+                ],
+                "job_title": ["Manager", "Director", "VP", "C-Level", "Individual"],
+                "seniority_level": ["Junior", "Mid", "Senior", "Executive"],
+                "geography": ["North America", "Europe", "Asia Pacific", "Other"],
+            },
+            "numerical_features": [
+                "email_engagement_score",
+                "website_sessions",
+                "pages_viewed",
+                "time_on_site",
+                "form_fills",
+                "content_downloads",
+                "campaign_touchpoints",
+                "account_revenue",
+                "account_employees",
+            ],
+        }
 
+        # Create mock parameters
+        self.parameters = {
+            "model_type": "RandomForestClassifier",
+            "n_estimators": RANDOM_FOREST_ESTIMATORS,
+            "random_state": RANDOM_FOREST_RANDOM_STATE,
+            "target_classes": [1, 2, 3, 4, 5],
+        }
+
+        # Create a simple mock model
         self.model = RandomForestClassifier(
             n_estimators=RANDOM_FOREST_ESTIMATORS,
             random_state=RANDOM_FOREST_RANDOM_STATE,
@@ -135,12 +167,24 @@ class LeadScoringPredictor:
     def _prepare_features(self, lead_features: list[LeadFeatures]) -> pd.DataFrame:
         """Convert lead features to model input format with vectorized processing"""
 
-        # Categorical encodings (from constants)
-        company_sizes = COMPANY_SIZES
-        industries = INDUSTRIES
-        job_titles = JOB_TITLES
-        seniority_levels = SENIORITY_LEVELS
-        geographies = GEOGRAPHIES
+        # Get categorical mappings from preprocessing info
+        if (
+            self.preprocessing_info
+            and "categorical_mappings" in self.preprocessing_info
+        ):
+            categorical_mappings = self.preprocessing_info["categorical_mappings"]
+            company_sizes = categorical_mappings.get("company_size", [])
+            industries = categorical_mappings.get("industry", [])
+            job_titles = categorical_mappings.get("job_title", [])
+            seniority_levels = categorical_mappings.get("seniority_level", [])
+            geographies = categorical_mappings.get("geography", [])
+        else:
+            # Fallback to empty lists if no preprocessing info available
+            company_sizes = []
+            industries = []
+            job_titles = []
+            seniority_levels = []
+            geographies = []
 
         # Extract data in vectorized manner
         data = {
