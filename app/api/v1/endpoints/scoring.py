@@ -113,13 +113,3 @@ async def get_model_info():
         logger.error("Failed to get model info", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to retrieve model information")
 
-
-@router.get("/data-lake/health")
-async def data_lake_health():
-    """Check data lake connectivity and status"""
-    try:
-        health = await data_lake_writer.health_check()
-        return JSONResponse(content=health)
-    except Exception as e:
-        logger.error("Data lake health check failed", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to check data lake health")

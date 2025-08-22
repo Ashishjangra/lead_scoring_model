@@ -1,11 +1,15 @@
-from pydantic import BaseSettings
-from typing import Optional
+from pydantic_settings import BaseSettings
+from typing import Optional, List
 
 
 class Settings(BaseSettings):
     app_name: str = "Lead Scoring API"
     app_version: str = "1.0.0"
-    debug: bool = False
+    env: str = "prod"
+    
+    @property
+    def debug(self) -> bool:
+        return self.env.lower() == "debug"
     
     # Server settings
     host: str = "0.0.0.0"
@@ -22,15 +26,12 @@ class Settings(BaseSettings):
     prediction_timeout: float = 0.5
     
     # AWS settings
-    aws_region: str = "us-west-2"
+    aws_region: str = "eu-west-1"
     
-    # Monitoring
-    enable_metrics: bool = True
-    metrics_port: int = 8080
     
     # Security
     api_key_header: str = "X-API-Key"
-    allowed_origins: list = ["*"]
+    allowed_origins: List[str] = ["*"]
     
     class Config:
         env_file = ".env"

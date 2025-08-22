@@ -12,6 +12,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.core.config import settings
 from app.models.schemas import LeadFeatures, LeadScore
+from app.core.constants import (
+    MODEL_TEMP_PATH, MODEL_S3_BUCKET, MODEL_S3_KEY,
+    THREAD_POOL_MAX_WORKERS, COMPANY_SIZES, INDUSTRIES, JOB_TITLES,
+    SENIORITY_LEVELS, GEOGRAPHIES, MOCK_CONFIDENCE_VALUE,
+    DEFAULT_DAYS_SINCE_INTERACTION, RANDOM_FOREST_ESTIMATORS,
+    RANDOM_FOREST_RANDOM_STATE
+)
 
 logger = structlog.get_logger()
 
@@ -23,7 +30,7 @@ class LeadScoringPredictor:
         self.model = None
         self.feature_columns = None
         self.model_version = "1.0.0"
-        self.executor = ThreadPoolExecutor(max_workers=8)  # Increased workers
+        self.executor = ThreadPoolExecutor(max_workers=THREAD_POOL_MAX_WORKERS)
         self._model_cache = {}
         self._feature_cache = {}
         self._load_model()
@@ -47,9 +54,9 @@ class LeadScoringPredictor:
     def _load_from_s3(self):
         """Load model from S3"""
         s3 = boto3.client('s3', region_name=settings.aws_region)
-        local_path = '/tmp/model.pkl'
-        bucket = 'ml-marketing-lead-scoring'
-        key = 'model/model.pkl'
+        local_path = MODEL_TEMP_PATH
+        bucket = MODEL_S3_BUCKET
+        key = MODEL_S3_KEY
         s3.download_file(bucket, key, local_path)
         
         with open(local_path, 'rb') as f:
@@ -86,7 +93,7 @@ class LeadScoringPredictor:
         
         # Create a simple mock XGBoost model
         from sklearn.ensemble import RandomForestClassifier
-        self.model = RandomForestClassifier(n_estimators=10, random_state=42)
+        self.model = RandomForestClassifier(n_estimators=RANDOM_FOREST_ESTIMATORS, random_state=RANDOM_FOREST_RANDOM_STATE)
         
         # Train on dummy data
         X_dummy = np.random.rand(100, len(self.feature_columns))
@@ -100,12 +107,12 @@ class LeadScoringPredictor:
         # Pre-allocate arrays for better performance
         batch_size = len(lead_features)
         
-        # Categorical encodings (cached for performance)
-        company_sizes = ['Small', 'Medium', 'Large', 'Enterprise']
-        industries = ['Technology', 'Healthcare', 'Finance', 'Manufacturing', 'Other']
-        job_titles = ['Manager', 'Director', 'VP', 'C-Level', 'Individual']
-        seniority_levels = ['Junior', 'Mid', 'Senior', 'Executive']
-        geographies = ['North America', 'Europe', 'Asia Pacific', 'Other']
+        # Categorical encodings (from constants)
+        company_sizes = COMPANY_SIZES
+        industries = INDUSTRIES
+        job_titles = JOB_TITLES
+        seniority_levels = SENIORITY_LEVELS
+        geographies = GEOGRAPHIES
         
         # Extract data in vectorized manner
         data = {
@@ -130,7 +137,7 @@ class LeadScoringPredictor:
         now = pd.Timestamp.now()
         data['days_since_last_interaction'] = [
             max(0, (now - pd.Timestamp(lead.last_campaign_interaction)).days) 
-            if lead.last_campaign_interaction else 999 
+            if lead.last_campaign_interaction else DEFAULT_DAYS_SINCE_INTERACTION 
             for lead in lead_features
         ]
         
@@ -186,7 +193,7 @@ class LeadScoringPredictor:
                 )
                 confidences = [max(proba) for proba in probabilities]
             else:
-                confidences = [0.8] * len(predictions)  # Mock confidence
+                confidences = [MOCK_CONFIDENCE_VALUE] * len(predictions)  # Mock confidence
             
             processing_time = (time.time() - start_time) * 1000
             

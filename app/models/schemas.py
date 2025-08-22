@@ -79,11 +79,3 @@ class HealthCheck(BaseModel):
     model_loaded: bool = Field(..., description="Whether model is loaded")
     uptime_seconds: float = Field(..., description="Service uptime in seconds")
 
-
-class MetricsResponse(BaseModel):
-    """Metrics response model"""
-    requests_total: int = Field(..., description="Total requests processed")
-    requests_per_second: float = Field(..., description="Current requests per second")
-    avg_response_time_ms: float = Field(..., description="Average response time")
-    error_rate: float = Field(..., description="Error rate percentage")
-    model_predictions_total: int = Field(..., description="Total predictions made")

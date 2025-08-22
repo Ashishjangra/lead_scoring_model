@@ -82,7 +82,9 @@ async def root():
         "service": settings.app_name,
         "version": settings.app_version,
         "status": "running",
-        "model_loaded": predictor.is_loaded()
+        "model_loaded": predictor.is_loaded(),
+        "debug_mode": settings.debug,
+        "env": settings.env
     }
 
 
