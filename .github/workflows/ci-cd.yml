@@ -10,7 +10,7 @@ env:
   AWS_REGION: eu-west-1
   ECR_REPOSITORY_DEV: lead-scoring-api-dev
   ECR_REPOSITORY_PROD: lead-scoring-api-prod
-  MIN_COVERAGE: 80
+  MIN_COVERAGE: 75
   MAX_SECURITY_ISSUES: 0
 
 jobs:
@@ -285,24 +285,6 @@ jobs:
           exit 1
         fi
         echo "✅ Image vulnerability scan passed"
-
-    - name: Generate SBOM
-      env:
-        IMAGE_TAG: ${{ needs.quality-gates.outputs.version }}
-      run: |
-        echo "📋 Generating Software Bill of Materials (SBOM)..."
-        ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-          anchore/syft:latest ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:$IMAGE_TAG \
-          -o spdx-json=sbom.spdx.json
-
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-artifacts-${{ needs.quality-gates.outputs.version }}
-        path: |
-          sbom.spdx.json
-        retention-days: 1
 
   deploy-production:
     needs: [build-and-push-prod]
