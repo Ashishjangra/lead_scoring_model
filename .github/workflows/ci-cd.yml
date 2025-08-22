@@ -216,18 +216,34 @@ jobs:
           --query 'taskDefinition' \
           --output json)
         
-        # Update the image in task definition
-        NEW_TASK_DEF=$(echo $CURRENT_TASK_DEF | jq --arg IMAGE "$NEW_IMAGE" '
-          .containerDefinitions[0].image = $IMAGE |
-          del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy, .enableFaultInjection, .tags)
-        ')
+        # Create new task definition with updated image
+        NEW_TASK_DEF=$(echo $CURRENT_TASK_DEF | jq --arg IMAGE "$NEW_IMAGE" '{
+          family: .family,
+          containerDefinitions: (.containerDefinitions | map(.image = $IMAGE)),
+          taskRoleArn: .taskRoleArn,
+          executionRoleArn: .executionRoleArn,
+          networkMode: .networkMode,
+          volumes: .volumes,
+          placementConstraints: .placementConstraints,
+          requiresCompatibilities: .requiresCompatibilities,
+          cpu: .cpu,
+          memory: .memory,
+          runtimePlatform: .runtimePlatform,
+          enableFaultInjection: .enableFaultInjection
+        }')
+        
+        # Save to file for debugging
+        echo "$NEW_TASK_DEF" > new-task-def-dev.json
         
         # Register new task definition
-        NEW_TASK_DEF_ARN=$(echo $NEW_TASK_DEF | aws ecs register-task-definition \
+        NEW_TASK_DEF_ARN=$(aws ecs register-task-definition \
           --region ${{ env.AWS_REGION }} \
-          --cli-input-json file:///dev/stdin \
+          --cli-input-json file://new-task-def-dev.json \
           --query 'taskDefinition.taskDefinitionArn' \
           --output text)
+        
+        # Clean up temp file
+        rm new-task-def-dev.json
         
         echo "✅ New task definition registered: $NEW_TASK_DEF_ARN"
         
@@ -350,18 +366,34 @@ jobs:
           --query 'taskDefinition' \
           --output json)
         
-        # Update the image in task definition
-        NEW_TASK_DEF=$(echo $CURRENT_TASK_DEF | jq --arg IMAGE "$NEW_IMAGE" '
-          .containerDefinitions[0].image = $IMAGE |
-          del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy, .enableFaultInjection, .tags)
-        ')
+        # Create new task definition with updated image
+        NEW_TASK_DEF=$(echo $CURRENT_TASK_DEF | jq --arg IMAGE "$NEW_IMAGE" '{
+          family: .family,
+          containerDefinitions: (.containerDefinitions | map(.image = $IMAGE)),
+          taskRoleArn: .taskRoleArn,
+          executionRoleArn: .executionRoleArn,
+          networkMode: .networkMode,
+          volumes: .volumes,
+          placementConstraints: .placementConstraints,
+          requiresCompatibilities: .requiresCompatibilities,
+          cpu: .cpu,
+          memory: .memory,
+          runtimePlatform: .runtimePlatform,
+          enableFaultInjection: .enableFaultInjection
+        }')
+        
+        # Save to file for debugging
+        echo "$NEW_TASK_DEF" > new-task-def-prod.json
         
         # Register new task definition
-        NEW_TASK_DEF_ARN=$(echo $NEW_TASK_DEF | aws ecs register-task-definition \
+        NEW_TASK_DEF_ARN=$(aws ecs register-task-definition \
           --region ${{ env.AWS_REGION }} \
-          --cli-input-json file:///dev/stdin \
+          --cli-input-json file://new-task-def-prod.json \
           --query 'taskDefinition.taskDefinitionArn' \
           --output text)
+        
+        # Clean up temp file
+        rm new-task-def-prod.json
         
         echo "✅ New task definition registered: $NEW_TASK_DEF_ARN"
         
