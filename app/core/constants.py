@@ -36,11 +36,11 @@ MAX_BATCH_SIZE_DEFAULT = 100
 # Data Lake Configuration (AWS Wrangler writes directly, no buffering needed)
 
 # Categorical Feature Values
-COMPANY_SIZES = ['Small', 'Medium', 'Large', 'Enterprise']
-INDUSTRIES = ['Technology', 'Healthcare', 'Finance', 'Manufacturing', 'Other']
-JOB_TITLES = ['Manager', 'Director', 'VP', 'C-Level', 'Individual']
-SENIORITY_LEVELS = ['Junior', 'Mid', 'Senior', 'Executive']
-GEOGRAPHIES = ['North America', 'Europe', 'Asia Pacific', 'Other']
+COMPANY_SIZES = ["Small", "Medium", "Large", "Enterprise"]
+INDUSTRIES = ["Technology", "Healthcare", "Finance", "Manufacturing", "Other"]
+JOB_TITLES = ["Manager", "Director", "VP", "C-Level", "Individual"]
+SENIORITY_LEVELS = ["Junior", "Mid", "Senior", "Executive"]
+GEOGRAPHIES = ["North America", "Europe", "Asia Pacific", "Other"]
 
 # Environment Detection
 ENV_DEBUG = "debug"

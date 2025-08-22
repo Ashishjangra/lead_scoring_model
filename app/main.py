@@ -1,15 +1,14 @@
-import structlog
 from contextlib import asynccontextmanager
+
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
-from app.core.config import settings
 from app.api.v1.router import router as api_router
+from app.core.config import settings
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.security import SecurityHeadersMiddleware
 from app.models.predictor import predictor
-
 
 # Configure structured logging
 structlog.configure(
@@ -22,7 +21,7 @@ structlog.configure(
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
-        structlog.processors.JSONRenderer()
+        structlog.processors.JSONRenderer(),
     ],
     context_class=dict,
     logger_factory=structlog.stdlib.LoggerFactory(),
@@ -37,13 +36,13 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI):
     """Application lifespan management"""
     logger.info("Starting Lead Scoring API", version=settings.app_version)
-    
+
     # Startup
     if not predictor.is_loaded():
         logger.warning("Model not loaded during startup")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Lead Scoring API")
 
@@ -55,7 +54,7 @@ app = FastAPI(
     description="Production-ready lead scoring API using XGBoost",
     lifespan=lifespan,
     docs_url="/docs" if settings.debug else None,
-    redoc_url="/redoc" if settings.debug else None
+    redoc_url="/redoc" if settings.debug else None,
 )
 
 # Add middleware
@@ -84,17 +83,18 @@ async def root():
         "status": "running",
         "model_loaded": predictor.is_loaded(),
         "debug_mode": settings.debug,
-        "env": settings.env
+        "env": settings.env,
     }
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host=settings.host,
         port=settings.port,
         workers=settings.workers,
         reload=settings.debug,
-        access_log=False  # Using custom logging middleware
+        access_log=False,  # Using custom logging middleware
     )
