@@ -75,6 +75,9 @@ addopts = "-ra -q --strict-markers --disable-warnings"
 testpaths = [
     "tests",
 ]
+pythonpath = [
+    "."
+]
 asyncio_mode = "auto"
 
 [tool.coverage.run]
