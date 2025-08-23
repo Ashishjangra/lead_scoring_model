@@ -235,7 +235,7 @@ class LeadScoringPredictor:
         # Convert XGBoost 0-4 predictions to business range 1-5
         if hasattr(self.model, 'predict_proba'):  # XGBoost model
             predictions = predictions + 1
-        
+
         # Ensure predictions are in range 1-5
         predictions = np.clip(predictions, 1, 5)
 

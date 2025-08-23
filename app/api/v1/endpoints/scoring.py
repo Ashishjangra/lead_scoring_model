@@ -97,7 +97,7 @@ async def score_leads(
 
         return response
 
-    except HTTPException as he:
+    except HTTPException:
         # Publish failure metrics (temporarily disabled)
         # background_tasks.add_task(
         #     metrics_publisher.publish_failure_metrics,

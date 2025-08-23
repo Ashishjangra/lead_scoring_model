@@ -123,7 +123,7 @@ class DataLakeWriter:
         try:
             # Create DataFrame from records
             df = pd.DataFrame(records)
-            
+
             # Fix data types for AWS Wrangler/Athena compatibility
             if "raw_last_campaign_interaction" in df.columns:
                 df["raw_last_campaign_interaction"] = df["raw_last_campaign_interaction"].astype("string")

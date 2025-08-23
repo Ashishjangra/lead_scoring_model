@@ -141,7 +141,7 @@ def test_score_with_custom_features():
 
     response = client.post("/api/v1/scoring/score", json=payload)
     assert response.status_code == 200
-    
+
     data = response.json()
     assert data["total_leads"] == 1
     assert 1 <= data["scores"][0]["score"] <= 5
@@ -161,7 +161,7 @@ def test_score_minimal_lead():
 
     response = client.post("/api/v1/scoring/score", json=payload)
     assert response.status_code == 200
-    
+
     data = response.json()
     assert data["total_leads"] == 1
     assert 1 <= data["scores"][0]["score"] <= 5
