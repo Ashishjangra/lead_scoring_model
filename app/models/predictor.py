@@ -67,7 +67,6 @@ class LeadScoringPredictor:
         self.preprocessing_info = loaded_package.get("preprocessing")
         self.model_version = loaded_package.get("version", MODEL_VERSION)
 
-
     def _prepare_features(self, lead_features: list[LeadFeatures]) -> pd.DataFrame:
         """Convert lead features to model input format with vectorized processing"""
 
@@ -173,7 +172,9 @@ class LeadScoringPredictor:
         except ValueError:
             return len(categories) + 1  # Unknown category
 
-    async def predict_batch(self, lead_features: list[LeadFeatures]) -> tuple[list[LeadScore], pd.DataFrame]:
+    async def predict_batch(
+        self, lead_features: list[LeadFeatures]
+    ) -> tuple[list[LeadScore], pd.DataFrame]:
         """Predict scores for a batch of leads and return both scores and engineered features"""
         start_time = time.time()
 
@@ -233,7 +234,7 @@ class LeadScoringPredictor:
         predictions = self.model.predict(X)
 
         # Convert XGBoost 0-4 predictions to business range 1-5
-        if hasattr(self.model, 'predict_proba'):  # XGBoost model
+        if hasattr(self.model, "predict_proba"):  # XGBoost model
             predictions = predictions + 1
 
         # Ensure predictions are in range 1-5

@@ -126,7 +126,9 @@ class DataLakeWriter:
 
             # Fix data types for AWS Wrangler/Athena compatibility
             if "raw_last_campaign_interaction" in df.columns:
-                df["raw_last_campaign_interaction"] = df["raw_last_campaign_interaction"].astype("string")
+                df["raw_last_campaign_interaction"] = df[
+                    "raw_last_campaign_interaction"
+                ].astype("string")
 
             # Write to S3 in Parquet format with Glue Catalog registration
             loop = asyncio.get_event_loop()
@@ -134,8 +136,16 @@ class DataLakeWriter:
                 self.executor, self._write_parquet_sync, df
             )
 
-            table_name = DATA_LAKE_TABLE_NAME_DEV if settings.env == "dev" else DATA_LAKE_TABLE_NAME_PROD
-            s3_path = DATA_LAKE_S3_PATH_DEV if settings.env == "dev" else DATA_LAKE_S3_PATH_PROD
+            table_name = (
+                DATA_LAKE_TABLE_NAME_DEV
+                if settings.env == "dev"
+                else DATA_LAKE_TABLE_NAME_PROD
+            )
+            s3_path = (
+                DATA_LAKE_S3_PATH_DEV
+                if settings.env == "dev"
+                else DATA_LAKE_S3_PATH_PROD
+            )
             logger.debug(
                 "Records written to Parquet",
                 path=s3_path,
@@ -156,8 +166,14 @@ class DataLakeWriter:
         boto3_session = boto3.Session(region_name=settings.aws_region)
 
         # Determine table name and S3 path based on environment
-        table_name = DATA_LAKE_TABLE_NAME_DEV if settings.env == "dev" else DATA_LAKE_TABLE_NAME_PROD
-        s3_path = DATA_LAKE_S3_PATH_DEV if settings.env == "dev" else DATA_LAKE_S3_PATH_PROD
+        table_name = (
+            DATA_LAKE_TABLE_NAME_DEV
+            if settings.env == "dev"
+            else DATA_LAKE_TABLE_NAME_PROD
+        )
+        s3_path = (
+            DATA_LAKE_S3_PATH_DEV if settings.env == "dev" else DATA_LAKE_S3_PATH_PROD
+        )
 
         # Write to S3 in Parquet format
         wr.s3.to_parquet(
