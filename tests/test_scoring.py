@@ -91,7 +91,7 @@ def test_score_leads_batch():
 
 def test_invalid_batch_size():
     """Test batch size validation"""
-    leads = [{"company_size": "Small"} for _ in range(101)]
+    leads = [{"company_size": "Small"} for _ in range(501)]
 
     payload = {"request_id": "invalid-batch", "leads": leads}
 
@@ -119,3 +119,62 @@ def test_root_endpoint():
     assert "service" in data
     assert "version" in data
     assert "status" in data
+
+
+def test_score_with_custom_features():
+    """Test scoring with custom features"""
+    payload = {
+        "request_id": "custom-features-test",
+        "leads": [
+            {
+                "company_size": "Medium",
+                "industry": "Technology",
+                "email_engagement_score": 0.9,
+                "custom_features": {
+                    "custom_feature_1": 0.75,
+                    "custom_feature_2": 100.0,
+                    "custom_feature_5": 42.5,
+                },
+            }
+        ],
+    }
+
+    response = client.post("/api/v1/scoring/score", json=payload)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["total_leads"] == 1
+    assert 1 <= data["scores"][0]["score"] <= 5
+    assert data["scores"][0]["features_used"] == 50
+
+
+def test_score_minimal_lead():
+    """Test scoring with minimal lead data"""
+    payload = {"request_id": "minimal-test", "leads": [{"email_engagement_score": 0.1}]}
+
+    response = client.post("/api/v1/scoring/score", json=payload)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["total_leads"] == 1
+    assert 1 <= data["scores"][0]["score"] <= 5
+
+
+def test_score_empty_leads():
+    """Test scoring with empty leads array"""
+    payload = {"request_id": "empty-test", "leads": []}
+
+    response = client.post("/api/v1/scoring/score", json=payload)
+    assert response.status_code == 422  # Validation error for empty array
+
+
+def test_xgboost_model_info():
+    """Test that model info shows XGBoost model details"""
+    response = client.get("/api/v1/scoring/model/info")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["version"] == "1.0.0"
+    assert data["loaded"] is True
+    assert data["features_count"] == 50
+    assert "XGB" in data["model_type"]  # Should be XGBClassifier

@@ -67,13 +67,13 @@ class ScoreRequest(BaseModel):
         default_factory=lambda: str(uuid.uuid4()), description="Unique request ID"
     )
     leads: list[LeadFeatures] = Field(
-        ..., min_length=1, max_length=100, description="List of leads to score"
+        ..., min_length=1, max_length=500, description="List of leads to score"
     )
 
     @validator("leads")
     def validate_leads(cls, v: list[LeadFeatures]) -> list[LeadFeatures]:
-        if len(v) > 100:
-            raise ValueError("Maximum 100 leads per request")
+        if len(v) > 500:
+            raise ValueError("Maximum 500 leads per request")
         return v
 
 

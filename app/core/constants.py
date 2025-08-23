@@ -7,7 +7,9 @@ Contains paths, regions, buckets, and environment-specific settings.
 MODEL_PATH_DEFAULT = "/app/models/lead_scoring_model.joblib"
 MODEL_TEMP_PATH = "/tmp/model.joblib"  # nosec B108 # Safe temp path for model files
 MODEL_S3_BUCKET = "ml-marketing-lead-scoring"
-MODEL_S3_KEY = "model/model.joblib"
+MODEL_VERSION = "1.0.0"
+MODEL_S3_KEY_TEMPLATE = "model/model_v{version}.joblib"
+MODEL_S3_KEY = MODEL_S3_KEY_TEMPLATE.format(version=MODEL_VERSION.replace(".", "_"))
 
 # AWS Configuration
 AWS_REGION_DEFAULT = "eu-west-1"
@@ -15,9 +17,11 @@ AWS_REGION_DEV = "eu-west-1"
 AWS_REGION_PROD = "eu-west-1"
 
 # AWS Wrangler Data Lake Configuration
-DATA_LAKE_S3_PATH = "s3://ml-marketing-lead-scoring/inference_data/"
+DATA_LAKE_S3_PATH_DEV = "s3://ml-marketing-lead-scoring/inference_data/dev/"
+DATA_LAKE_S3_PATH_PROD = "s3://ml-marketing-lead-scoring/inference_data/prod/"
 DATA_LAKE_DATABASE = "ml_marketing"
-DATA_LAKE_TABLE_NAME = "lead_score"
+DATA_LAKE_TABLE_NAME_DEV = "lead_score_dev"
+DATA_LAKE_TABLE_NAME_PROD = "lead_score_prod"
 DATA_LAKE_PARTITION_COLUMNS = ["year", "month", "day"]
 DATA_LAKE_WRITE_MODE = "append"
 DATA_LAKE_SCHEMA_EVOLUTION = True
@@ -27,6 +31,11 @@ DATA_LAKE_CONCURRENT_PARTITIONING = False
 # Threading Configuration
 THREAD_POOL_MAX_WORKERS = 1  # Minimal for dev testing
 DATA_LAKE_THREAD_WORKERS = 1
+METRICS_THREAD_WORKERS = 2
+
+# CloudWatch Metrics Configuration
+METRICS_NAMESPACE_DEV = "LeadScoring/Dev"
+METRICS_NAMESPACE_PROD = "LeadScoring/Prod"
 
 # Request Limits
 MAX_REQUEST_SIZE_MB = 10

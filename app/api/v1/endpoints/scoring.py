@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.core.data_lake import data_lake_writer
+from app.core.metrics import metrics_publisher
 from app.models.predictor import predictor
 from app.models.schemas import ScoreRequest, ScoreResponse
 
@@ -51,8 +52,8 @@ async def score_leads(
         model_info = predictor.get_model_info()
         model_version = model_info.get("version", "unknown")
 
-        # Predict scores
-        scores = await predictor.predict_batch(score_request.leads)
+        # Predict scores and get engineered features
+        scores, engineered_features = await predictor.predict_batch(score_request.leads)
 
         # Calculate total processing time
         processing_time_ms = (time.time() - start_time) * 1000
@@ -66,7 +67,7 @@ async def score_leads(
             model_version=model_version,
         )
 
-        # Write results to data lake asynchronously (non-blocking)
+        # Write results to data lake asynchronously with complete feature data
         background_tasks.add_task(
             data_lake_writer.write_predictions_async,
             request_id,
@@ -74,6 +75,17 @@ async def score_leads(
             scores,
             processing_time_ms,
             model_version,
+            engineered_features,
+        )
+
+        # Publish metrics to CloudWatch asynchronously
+        background_tasks.add_task(
+            metrics_publisher.publish_prediction_metrics,
+            request_id,
+            scores,
+            processing_time_ms,
+            model_version,
+            engineered_features,
         )
 
         logger.info(
@@ -85,10 +97,20 @@ async def score_leads(
 
         return response
 
-    except HTTPException:
+    except HTTPException as he:
+        # Publish failure metrics
+        background_tasks.add_task(
+            metrics_publisher.publish_failure_metrics,
+            f"HTTP_{he.status_code}",
+        )
         raise
     except Exception as e:
         logger.error("Lead scoring failed", request_id=request_id, error=str(e))
+        # Publish failure metrics
+        background_tasks.add_task(
+            metrics_publisher.publish_failure_metrics,
+            "InternalError",
+        )
         raise HTTPException(
             status_code=500, detail="Internal server error during prediction"
         ) from None

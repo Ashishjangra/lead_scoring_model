@@ -18,9 +18,11 @@ from app.core.constants import (
     DATA_LAKE_CONCURRENT_PARTITIONING,
     DATA_LAKE_DATABASE,
     DATA_LAKE_PARTITION_COLUMNS,
-    DATA_LAKE_S3_PATH,
+    DATA_LAKE_S3_PATH_DEV,
+    DATA_LAKE_S3_PATH_PROD,
     DATA_LAKE_SCHEMA_EVOLUTION,
-    DATA_LAKE_TABLE_NAME,
+    DATA_LAKE_TABLE_NAME_DEV,
+    DATA_LAKE_TABLE_NAME_PROD,
     DATA_LAKE_THREAD_WORKERS,
     DATA_LAKE_WRITE_MODE,
 )
@@ -42,16 +44,17 @@ class DataLakeWriter:
         scores: list[LeadScore],
         processing_time_ms: float,
         model_version: str,
+        engineered_features: pd.DataFrame | None = None,
     ) -> bool:
         """Write prediction results to data lake asynchronously using AWS Wrangler"""
         try:
             # Prepare timestamp for partitioning
             timestamp_dt = datetime.now(timezone.utc)
 
-            # Create flat records for DataFrame
+            # Create comprehensive records with both raw and engineered features
             records = []
             for i, (lead, score) in enumerate(zip(request.leads, scores, strict=False)):
-                # Flatten the structure for Parquet
+                # Base record with metadata and results
                 record = {
                     # Metadata
                     "request_id": request_id,
@@ -67,29 +70,34 @@ class DataLakeWriter:
                     "score": score.score,
                     "confidence": score.confidence,
                     "features_used": score.features_used,
-                    # Input features (flattened)
-                    "company_size": lead.company_size,
-                    "industry": lead.industry,
-                    "job_title": lead.job_title,
-                    "seniority_level": lead.seniority_level,
-                    "geography": lead.geography,
-                    "email_engagement_score": lead.email_engagement_score,
-                    "website_sessions": lead.website_sessions,
-                    "pages_viewed": lead.pages_viewed,
-                    "time_on_site": lead.time_on_site,
-                    "form_fills": lead.form_fills,
-                    "content_downloads": lead.content_downloads,
-                    "campaign_touchpoints": lead.campaign_touchpoints,
-                    "account_revenue": lead.account_revenue,
-                    "account_employees": lead.account_employees,
-                    "existing_customer": lead.existing_customer,
-                    "last_campaign_interaction": lead.last_campaign_interaction,
+                    # Raw input features (original data)
+                    "raw_company_size": lead.company_size,
+                    "raw_industry": lead.industry,
+                    "raw_job_title": lead.job_title,
+                    "raw_seniority_level": lead.seniority_level,
+                    "raw_geography": lead.geography,
+                    "raw_email_engagement_score": lead.email_engagement_score,
+                    "raw_website_sessions": lead.website_sessions,
+                    "raw_pages_viewed": lead.pages_viewed,
+                    "raw_time_on_site": lead.time_on_site,
+                    "raw_form_fills": lead.form_fills,
+                    "raw_content_downloads": lead.content_downloads,
+                    "raw_campaign_touchpoints": lead.campaign_touchpoints,
+                    "raw_account_revenue": lead.account_revenue,
+                    "raw_account_employees": lead.account_employees,
+                    "raw_existing_customer": lead.existing_customer,
+                    "raw_last_campaign_interaction": lead.last_campaign_interaction,
                 }
 
-                # Add custom features as separate columns
+                # Add raw custom features
                 if lead.custom_features:
                     for key, value in lead.custom_features.items():
-                        record[f"custom_{key}"] = value
+                        record[f"raw_{key}"] = value
+
+                # Add ALL 50 engineered features that were actually used by the model
+                if engineered_features is not None and i < len(engineered_features):
+                    for col in engineered_features.columns:
+                        record[f"engineered_{col}"] = engineered_features.iloc[i][col]
 
                 records.append(record)
 
@@ -116,17 +124,33 @@ class DataLakeWriter:
             # Create DataFrame from records
             df = pd.DataFrame(records)
 
+            # Fix data types for AWS Wrangler/Athena compatibility
+            if "raw_last_campaign_interaction" in df.columns:
+                df["raw_last_campaign_interaction"] = df[
+                    "raw_last_campaign_interaction"
+                ].astype("string")
+
             # Write to S3 in Parquet format with Glue Catalog registration
             loop = asyncio.get_event_loop()
             rows_written = await loop.run_in_executor(
                 self.executor, self._write_parquet_sync, df
             )
 
+            table_name = (
+                DATA_LAKE_TABLE_NAME_DEV
+                if settings.env == "dev"
+                else DATA_LAKE_TABLE_NAME_PROD
+            )
+            s3_path = (
+                DATA_LAKE_S3_PATH_DEV
+                if settings.env == "dev"
+                else DATA_LAKE_S3_PATH_PROD
+            )
             logger.debug(
                 "Records written to Parquet",
-                path=DATA_LAKE_S3_PATH,
+                path=s3_path,
                 database=DATA_LAKE_DATABASE,
-                table=DATA_LAKE_TABLE_NAME,
+                table=table_name,
                 records=rows_written,
             )
 
@@ -141,13 +165,23 @@ class DataLakeWriter:
         # Create boto3 session with region
         boto3_session = boto3.Session(region_name=settings.aws_region)
 
+        # Determine table name and S3 path based on environment
+        table_name = (
+            DATA_LAKE_TABLE_NAME_DEV
+            if settings.env == "dev"
+            else DATA_LAKE_TABLE_NAME_PROD
+        )
+        s3_path = (
+            DATA_LAKE_S3_PATH_DEV if settings.env == "dev" else DATA_LAKE_S3_PATH_PROD
+        )
+
         # Write to S3 in Parquet format
         wr.s3.to_parquet(
             df=df,
-            path=DATA_LAKE_S3_PATH,
+            path=s3_path,
             dataset=True,
             database=DATA_LAKE_DATABASE,
-            table=DATA_LAKE_TABLE_NAME,
+            table=table_name,
             mode=DATA_LAKE_WRITE_MODE,  # type: ignore
             index=False,
             partition_cols=DATA_LAKE_PARTITION_COLUMNS,
