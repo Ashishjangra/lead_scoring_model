@@ -133,10 +133,10 @@ def test_score_with_custom_features():
                 "custom_features": {
                     "custom_feature_1": 0.75,
                     "custom_feature_2": 100.0,
-                    "custom_feature_5": 42.5
-                }
+                    "custom_feature_5": 42.5,
+                },
             }
-        ]
+        ],
     }
 
     response = client.post("/api/v1/scoring/score", json=payload)
@@ -150,14 +150,7 @@ def test_score_with_custom_features():
 
 def test_score_minimal_lead():
     """Test scoring with minimal lead data"""
-    payload = {
-        "request_id": "minimal-test",
-        "leads": [
-            {
-                "email_engagement_score": 0.1
-            }
-        ]
-    }
+    payload = {"request_id": "minimal-test", "leads": [{"email_engagement_score": 0.1}]}
 
     response = client.post("/api/v1/scoring/score", json=payload)
     assert response.status_code == 200
@@ -169,10 +162,7 @@ def test_score_minimal_lead():
 
 def test_score_empty_leads():
     """Test scoring with empty leads array"""
-    payload = {
-        "request_id": "empty-test",
-        "leads": []
-    }
+    payload = {"request_id": "empty-test", "leads": []}
 
     response = client.post("/api/v1/scoring/score", json=payload)
     assert response.status_code == 422  # Validation error for empty array
