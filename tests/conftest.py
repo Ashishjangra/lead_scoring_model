@@ -1,69 +1,83 @@
 """Test configuration and fixtures"""
 
+import os
 from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
 
+# Set environment variables before any app imports
+os.environ["ENV"] = "test"
+os.environ["AWS_DEFAULT_REGION"] = "eu-west-1"
+
+
+def pytest_configure(config):
+    """Configure pytest with necessary patches before test collection"""
+    # Patch boto3 globally to prevent credential issues
+    boto3_patcher = patch("boto3.client")
+    mock_boto3 = boto3_patcher.start()
+
+    def mock_client_factory(service_name, **kwargs):
+        mock_client = Mock()
+        if service_name == "s3":
+            mock_client.download_file.side_effect = Exception(
+                "NoCredentialsError: test mode"
+            )
+        elif service_name == "cloudwatch":
+            mock_client.put_metric_data.return_value = {}
+        return mock_client
+
+    mock_boto3.side_effect = mock_client_factory
+
+    # Store patcher for cleanup
+    config._boto3_patcher = boto3_patcher
+
+
+def pytest_unconfigure(config):
+    """Clean up patches after tests"""
+    if hasattr(config, "_boto3_patcher"):
+        config._boto3_patcher.stop()
+
 
 @pytest.fixture(autouse=True)
-def mock_model_loading():
-    """Mock model loading to avoid AWS credentials requirement in tests"""
-    with patch("app.models.predictor.LeadScoringPredictor._load_from_s3") as mock_s3:
-        # Create a mock model
+def setup_test_predictor():
+    """Set up predictor with mock model for all tests"""
+    with patch("app.models.predictor.LeadScoringPredictor._load_from_s3"):
+        # Import after patching
+        from app.models.predictor import predictor
+
+        # Create mock model that adapts to input size
         mock_model = Mock()
-        mock_model.predict.return_value = np.array(
-            [3, 4, 2, 5, 1]
-        )  # Sample predictions
-        mock_model.predict_proba.return_value = np.array(
-            [
-                [0.1, 0.1, 0.6, 0.1, 0.1],  # High confidence for score 3
-                [0.05, 0.05, 0.05, 0.8, 0.05],  # High confidence for score 4
-                [0.2, 0.6, 0.1, 0.05, 0.05],  # High confidence for score 2
-                [0.05, 0.05, 0.05, 0.05, 0.8],  # High confidence for score 5
-                [0.8, 0.1, 0.05, 0.025, 0.025],  # High confidence for score 1
-            ]
-        )
+        mock_model.__class__.__name__ = "XGBClassifier"
 
-        def mock_load_side_effect():
-            # Set up the predictor with mock data
-            from app.models.predictor import predictor
+        def mock_predict(X):
+            # Return predictions matching input size
+            batch_size = len(X) if hasattr(X, "__len__") else 1
+            return np.random.randint(1, 6, size=batch_size)
 
-            predictor.model = mock_model
-            predictor.feature_columns = [f"feature_{i}" for i in range(50)]
-            predictor.model_version = "1.0.0"
-            predictor.parameters = {"test": True}
-            predictor.preprocessing_info = {
-                "categorical_mappings": {
-                    "company_size": ["Small", "Medium", "Large", "Enterprise"],
-                    "industry": ["Technology", "Healthcare", "Finance", "Retail"],
-                    "job_title": ["Manager", "Director", "VP", "C-Level"],
-                    "seniority_level": ["Junior", "Mid", "Senior", "Executive"],
-                    "geography": ["North America", "Europe", "Asia Pacific"],
-                }
+        def mock_predict_proba(X):
+            # Return probabilities matching input size
+            batch_size = len(X) if hasattr(X, "__len__") else 1
+            # Generate random probabilities that sum to 1
+            probs = np.random.dirichlet(np.ones(5), size=batch_size)
+            return probs
+
+        mock_model.predict.side_effect = mock_predict
+        mock_model.predict_proba.side_effect = mock_predict_proba
+
+        # Set up predictor
+        predictor.model = mock_model
+        predictor.feature_columns = [f"feature_{i}" for i in range(50)]
+        predictor.model_version = "1.0.0"
+        predictor.parameters = {"test": True}
+        predictor.preprocessing_info = {
+            "categorical_mappings": {
+                "company_size": ["Small", "Medium", "Large", "Enterprise"],
+                "industry": ["Technology", "Healthcare", "Finance", "Retail"],
+                "job_title": ["Manager", "Director", "VP", "C-Level"],
+                "seniority_level": ["Junior", "Mid", "Senior", "Executive"],
+                "geography": ["North America", "Europe", "Asia Pacific"],
             }
+        }
 
-        mock_s3.side_effect = mock_load_side_effect
-        yield mock_s3
-
-
-@pytest.fixture(autouse=True)
-def mock_cloudwatch():
-    """Mock CloudWatch metrics to avoid AWS calls in tests"""
-    with patch("app.core.metrics.CloudWatchMetrics.__init__") as mock_init:
-        mock_init.return_value = None
-        with patch(
-            "app.core.metrics.metrics_publisher.publish_prediction_metrics"
-        ) as mock_publish:
-            mock_publish.return_value = None
-            yield mock_publish
-
-
-@pytest.fixture(autouse=True)
-def mock_data_lake():
-    """Mock data lake writer to avoid AWS calls in tests"""
-    with patch(
-        "app.core.data_lake.DataLakeWriter.write_predictions_async"
-    ) as mock_write:
-        mock_write.return_value = True
-        yield mock_write
+        yield

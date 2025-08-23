@@ -39,6 +39,11 @@ class LeadScoringPredictor:
 
     def _load_model(self) -> None:
         """Load the XGBoost model from S3 only"""
+        # Skip model loading in test environment
+        if getattr(settings, "env", "dev") == "test":
+            logger.info("Test environment detected - skipping model loading")
+            return
+
         try:
             logger.info(
                 "Loading model from S3",
