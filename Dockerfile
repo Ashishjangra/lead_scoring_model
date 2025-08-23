@@ -29,9 +29,9 @@ RUN uv sync --frozen --no-dev
 # Copy application code
 COPY app/ ./app/
 
-# Create directories for models and logs
-RUN mkdir -p /app/models /app/logs && \
-    chown -R appuser:appuser /app
+# Create directories for models, logs, and UV cache
+RUN mkdir -p /app/models /app/logs /home/appuser/.cache && \
+    chown -R appuser:appuser /app /home/appuser
 
 # Switch to non-root user
 USER appuser
@@ -44,4 +44,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 EXPOSE 8000
 
 # Run the application
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+CMD ["uv", "run", "python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

@@ -25,8 +25,8 @@ DATA_LAKE_CONCURRENT_PARTITIONING = False
 
 
 # Threading Configuration
-THREAD_POOL_MAX_WORKERS = 8
-DATA_LAKE_THREAD_WORKERS = 4
+THREAD_POOL_MAX_WORKERS = 1  # Minimal for dev testing
+DATA_LAKE_THREAD_WORKERS = 1
 
 # Request Limits
 MAX_REQUEST_SIZE_MB = 10
@@ -37,7 +37,17 @@ MAX_BATCH_SIZE_DEFAULT = 100
 
 # Environment Detection
 ENV_DEBUG = "debug"
+ENV_DEV = "dev"
 ENV_PROD = "prod"
+
+# Logging Configuration
+LOG_GROUP_NAME = "lead-scoring"
+LOG_STREAM_DEV = "lead-scoring-dev"
+LOG_STREAM_PROD = "lead-scoring-prod"
+LOG_FILE_PATH = "/tmp/lead-scoring.log"  # nosec B108 # Safe temp path for log files
+LOG_LEVEL_DEBUG = "DEBUG"
+LOG_LEVEL_INFO = "INFO"
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 # Performance Configuration
 PREDICTION_TIMEOUT_DEFAULT = 0.5  # seconds
