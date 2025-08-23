@@ -1,7 +1,6 @@
 import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from typing import Any
 
 import boto3  # type: ignore[import-untyped]
@@ -9,17 +8,14 @@ import joblib  # type: ignore[import-untyped]
 import numpy as np
 import pandas as pd
 import structlog
-from sklearn.ensemble import RandomForestClassifier  # type: ignore[import-untyped]
 
 from app.core.config import settings
 from app.core.constants import (
     DEFAULT_DAYS_SINCE_INTERACTION,
-    MOCK_CONFIDENCE_VALUE,
     MODEL_S3_BUCKET,
     MODEL_S3_KEY,
     MODEL_TEMP_PATH,
-    RANDOM_FOREST_ESTIMATORS,
-    RANDOM_FOREST_RANDOM_STATE,
+    MODEL_VERSION,
     THREAD_POOL_MAX_WORKERS,
 )
 from app.models.schemas import LeadFeatures, LeadScore
@@ -33,7 +29,7 @@ class LeadScoringPredictor:
     def __init__(self) -> None:
         self.model: Any = None
         self.feature_columns: list[str] | None = None
-        self.model_version = "1.0.0"
+        self.model_version = MODEL_VERSION
         self.parameters: dict[str, Any] | None = None
         self.preprocessing_info: dict[str, Any] | None = None
         self.executor = ThreadPoolExecutor(max_workers=THREAD_POOL_MAX_WORKERS)
@@ -42,24 +38,19 @@ class LeadScoringPredictor:
         self._load_model()
 
     def _load_model(self) -> None:
-        """Load the XGBoost model from local file or S3"""
+        """Load the XGBoost model from S3 only"""
         try:
-            if settings.model_bucket and settings.model_key:
-                logger.info(
-                    "Loading model from S3",
-                    bucket=settings.model_bucket,
-                    key=settings.model_key,
-                )
-                self._load_from_s3()
-            else:
-                logger.info("Loading model from local file", path=settings.model_path)
-                self._load_from_file()
-
+            logger.info(
+                "Loading model from S3",
+                bucket=MODEL_S3_BUCKET,
+                key=MODEL_S3_KEY,
+            )
+            self._load_from_s3()
             logger.info("Model loaded successfully", version=self.model_version)
 
         except Exception as e:
-            logger.error("Failed to load model", error=str(e))
-            self._load_mock_model()
+            logger.error("Failed to load model from S3", error=str(e))
+            raise RuntimeError(f"Model loading failed: {str(e)}") from e
 
     def _load_from_s3(self) -> None:
         """Load model from S3"""
@@ -74,95 +65,8 @@ class LeadScoringPredictor:
         self.parameters = loaded_package.get("parameters")
         self.feature_columns = loaded_package.get("feature_names")
         self.preprocessing_info = loaded_package.get("preprocessing")
-        self.model_version = loaded_package.get("version", "1.0.0")
+        self.model_version = loaded_package.get("version", MODEL_VERSION)
 
-    def _load_from_file(self) -> None:
-        """Load model from local file"""
-        if Path(settings.model_path).exists():
-            loaded_package = joblib.load(settings.model_path)
-            self.model = loaded_package["model"]
-            self.parameters = loaded_package.get("parameters")
-            self.feature_columns = loaded_package.get("feature_names")
-            self.preprocessing_info = loaded_package.get("preprocessing")
-            self.model_version = loaded_package.get("version", "1.0.0")
-        else:
-            raise FileNotFoundError(f"Model file not found: {settings.model_path}")
-
-    def _load_mock_model(self) -> None:
-        """Load a mock model for development/testing"""
-        logger.warning("Loading mock model for development")
-
-        # Create mock feature columns (50 features as specified)
-        self.feature_columns = [
-            "company_size_encoded",
-            "industry_encoded",
-            "job_title_encoded",
-            "seniority_level_encoded",
-            "geography_encoded",
-            "email_engagement_score",
-            "website_sessions",
-            "pages_viewed",
-            "time_on_site",
-            "form_fills",
-            "content_downloads",
-            "campaign_touchpoints",
-            "account_revenue",
-            "account_employees",
-            "existing_customer_encoded",
-            "days_since_last_interaction",
-        ] + [
-            f"custom_feature_{i}" for i in range(1, 35)
-        ]  # 50 total features
-
-        # Create mock preprocessing info with categorical mappings
-        self.preprocessing_info = {
-            "categorical_mappings": {
-                "company_size": ["Small", "Medium", "Large", "Enterprise"],
-                "industry": [
-                    "Technology",
-                    "Healthcare",
-                    "Finance",
-                    "Manufacturing",
-                    "Other",
-                ],
-                "job_title": ["Manager", "Director", "VP", "C-Level", "Individual"],
-                "seniority_level": ["Junior", "Mid", "Senior", "Executive"],
-                "geography": ["North America", "Europe", "Asia Pacific", "Other"],
-            },
-            "numerical_features": [
-                "email_engagement_score",
-                "website_sessions",
-                "pages_viewed",
-                "time_on_site",
-                "form_fills",
-                "content_downloads",
-                "campaign_touchpoints",
-                "account_revenue",
-                "account_employees",
-            ],
-        }
-
-        # Create mock parameters
-        self.parameters = {
-            "model_type": "RandomForestClassifier",
-            "n_estimators": RANDOM_FOREST_ESTIMATORS,
-            "random_state": RANDOM_FOREST_RANDOM_STATE,
-            "target_classes": [1, 2, 3, 4, 5],
-        }
-
-        # Create a simple mock model
-        self.model = RandomForestClassifier(
-            n_estimators=RANDOM_FOREST_ESTIMATORS,
-            random_state=RANDOM_FOREST_RANDOM_STATE,
-        )
-
-        # Train on dummy data
-        if self.feature_columns:
-            X_dummy = np.random.rand(100, len(self.feature_columns))
-            y_dummy = np.random.randint(1, 6, 100)
-            self.model.fit(X_dummy, y_dummy)
-
-        self.model_version = "mock-1.0.0"
 
     def _prepare_features(self, lead_features: list[LeadFeatures]) -> pd.DataFrame:
         """Convert lead features to model input format with vectorized processing"""
@@ -269,8 +173,8 @@ class LeadScoringPredictor:
         except ValueError:
             return len(categories) + 1  # Unknown category
 
-    async def predict_batch(self, lead_features: list[LeadFeatures]) -> list[LeadScore]:
-        """Predict scores for a batch of leads"""
+    async def predict_batch(self, lead_features: list[LeadFeatures]) -> tuple[list[LeadScore], pd.DataFrame]:
+        """Predict scores for a batch of leads and return both scores and engineered features"""
         start_time = time.time()
 
         try:
@@ -283,16 +187,14 @@ class LeadScoringPredictor:
                 self.executor, self._predict_sync, X
             )
 
-            # Calculate confidence scores (mock implementation)
+            # Calculate confidence scores
             if self.model and hasattr(self.model, "predict_proba"):
                 probabilities = await loop.run_in_executor(
                     self.executor, self.model.predict_proba, X
                 )
                 confidences = [max(proba) for proba in probabilities]
             else:
-                confidences = [MOCK_CONFIDENCE_VALUE] * len(
-                    predictions
-                )  # Mock confidence
+                confidences = [0.5] * len(predictions)  # Fallback confidence
 
             processing_time = (time.time() - start_time) * 1000
 
@@ -318,7 +220,7 @@ class LeadScoringPredictor:
                 model_version=self.model_version,
             )
 
-            return results
+            return results, X  # Return both scores and engineered features
 
         except Exception as e:
             logger.error("Prediction failed", error=str(e))
@@ -330,6 +232,10 @@ class LeadScoringPredictor:
             raise ValueError("Model is not loaded")
         predictions = self.model.predict(X)
 
+        # Convert XGBoost 0-4 predictions to business range 1-5
+        if hasattr(self.model, 'predict_proba'):  # XGBoost model
+            predictions = predictions + 1
+        
         # Ensure predictions are in range 1-5
         predictions = np.clip(predictions, 1, 5)
 
