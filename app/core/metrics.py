@@ -135,9 +135,18 @@ class CloudWatchMetrics:
             timestamp = datetime.now(timezone.utc)
             metrics_data: list[dict[str, Any]] = []
 
-            # Operational failure metrics
-            self._add_operational_metrics(
-                metrics_data, 0, 0, timestamp, False, error_type
+            # Simple failure metric with validated values only
+            metrics_data.append(
+                {
+                    "MetricName": "RequestFailure",
+                    "Value": 1.0,
+                    "Unit": "Count",
+                    "Timestamp": timestamp,
+                    "Dimensions": [
+                        {"Name": "Environment", "Value": settings.env},
+                        {"Name": "ErrorType", "Value": error_type or "Unknown"},
+                    ],
+                }
             )
 
             loop = asyncio.get_event_loop()

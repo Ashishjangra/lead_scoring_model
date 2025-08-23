@@ -91,7 +91,7 @@ def test_score_leads_batch():
 
 def test_invalid_batch_size():
     """Test batch size validation"""
-    leads = [{"company_size": "Small"} for _ in range(101)]
+    leads = [{"company_size": "Small"} for _ in range(501)]
 
     payload = {"request_id": "invalid-batch", "leads": leads}
 

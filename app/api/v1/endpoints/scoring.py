@@ -97,20 +97,20 @@ async def score_leads(
 
         return response
 
-    except HTTPException:
-        # Publish failure metrics (temporarily disabled)
-        # background_tasks.add_task(
-        #     metrics_publisher.publish_failure_metrics,
-        #     f"HTTP_{he.status_code}",
-        # )
+    except HTTPException as he:
+        # Publish failure metrics
+        background_tasks.add_task(
+            metrics_publisher.publish_failure_metrics,
+            f"HTTP_{he.status_code}",
+        )
         raise
     except Exception as e:
         logger.error("Lead scoring failed", request_id=request_id, error=str(e))
-        # Publish failure metrics (temporarily disabled)
-        # background_tasks.add_task(
-        #     metrics_publisher.publish_failure_metrics,
-        #     "InternalError",
-        # )
+        # Publish failure metrics
+        background_tasks.add_task(
+            metrics_publisher.publish_failure_metrics,
+            "InternalError",
+        )
         raise HTTPException(
             status_code=500, detail="Internal server error during prediction"
         ) from None
