@@ -5,23 +5,17 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
-import boto3  # type: ignore
 import structlog
-import watchtower
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.constants import (
     ENV_DEBUG,
     ENV_DEV,
-    ENV_PROD,
     LOG_FILE_PATH,
     LOG_FORMAT,
-    LOG_GROUP_NAME,
     LOG_LEVEL_DEBUG,
     LOG_LEVEL_INFO,
-    LOG_STREAM_DEV,
-    LOG_STREAM_PROD,
 )
 
 
@@ -50,29 +44,9 @@ def setup_logger() -> logging.Logger:
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    # Add CloudWatch handler for dev and prod environments
-    if env in [ENV_DEV, ENV_PROD]:
-        try:
-            # Determine log stream based on environment
-            log_stream = LOG_STREAM_DEV if env == ENV_DEV else LOG_STREAM_PROD
-
-            # Create boto3 client
-            logs_client = boto3.client("logs")
-
-            # Create CloudWatch handler
-            cloudwatch_handler = watchtower.CloudWatchLogHandler(
-                log_group_name=LOG_GROUP_NAME,
-                log_stream_name=log_stream,
-                boto3_client=logs_client,
-                create_log_group=True,
-                create_log_stream=True,
-            )
-            cloudwatch_handler.setFormatter(formatter)
-            logger.addHandler(cloudwatch_handler)
-
-        except Exception as e:
-            # Fallback to console logging if CloudWatch setup fails
-            logger.warning(f"Failed to setup CloudWatch logging: {e}")
+    # For now, use console logging only - ECS captures stdout/stderr
+    # This eliminates CloudWatch setup issues during debugging
+    logger.info(f"Logger configured for {env} environment - using console output")
 
     # Add file handler for debug environment
     if env == ENV_DEBUG:

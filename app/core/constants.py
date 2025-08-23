@@ -42,8 +42,8 @@ ENV_PROD = "prod"
 
 # Logging Configuration
 LOG_GROUP_NAME = "lead-scoring"
-LOG_STREAM_DEV = "dev"
-LOG_STREAM_PROD = "prod"
+LOG_STREAM_DEV = "lead-scoring-dev"
+LOG_STREAM_PROD = "lead-scoring-prod"
 LOG_FILE_PATH = "/tmp/lead-scoring.log"  # nosec B108 # Safe temp path for log files
 LOG_LEVEL_DEBUG = "DEBUG"
 LOG_LEVEL_INFO = "INFO"
