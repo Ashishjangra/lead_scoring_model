@@ -180,8 +180,6 @@ curl -X POST "http://localhost:8000/api/v1/score" \
 ## Monitoring & Observability
 
 ### Health Checks
-- **Liveness**: `GET /api/v1/health/live`
-- **Readiness**: `GET /api/v1/health/ready`
 - **Health**: `GET /api/v1/health`
 
 ### Logging

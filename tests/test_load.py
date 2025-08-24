@@ -162,11 +162,11 @@ class LoadTester:
 
             if env == "prod":
                 base_url = (
-                    "https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com"
+                    "http://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com"
                 )
             elif env == "dev":
                 base_url = (
-                    "https://alb-lead-scoring-dev-263460192.eu-west-1.elb.amazonaws.com"
+                    "http://alb-lead-scoring-dev-263460192.eu-west-1.elb.amazonaws.com"
                 )
             else:
                 base_url = "http://localhost:8000"  # fallback for local testing

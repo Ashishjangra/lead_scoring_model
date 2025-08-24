@@ -1,7 +1,6 @@
 import time
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.models.predictor import predictor
@@ -27,21 +26,3 @@ async def health_check() -> HealthCheck:
         model_loaded=model_loaded,
         uptime_seconds=uptime,
     )
-
-
-@router.get("/health/ready")
-async def readiness_check() -> JSONResponse:
-    """Readiness check for ECS Fargate"""
-    if not predictor.is_loaded():
-        return JSONResponse(
-            status_code=503,
-            content={"status": "not ready", "reason": "model not loaded"},
-        )
-
-    return JSONResponse(content={"status": "ready"})
-
-
-@router.get("/health/live")
-async def liveness_check() -> JSONResponse:
-    """Liveness check for ECS Fargate"""
-    return JSONResponse(content={"status": "alive"})
