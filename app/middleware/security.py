@@ -28,8 +28,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "max-age=31536000; includeSubDomains"
         )
 
-        # Content Security Policy - relaxed for Swagger UI in debug mode
-        if settings.debug:
+        # Content Security Policy - relaxed for Swagger UI in dev/debug environments
+        if settings.env.lower() in ["dev", "debug"]:
             response.headers["Content-Security-Policy"] = (
                 "default-src 'self'; "
                 "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "

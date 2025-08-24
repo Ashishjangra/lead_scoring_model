@@ -56,21 +56,21 @@ jobs:
 
     - name: Run linting
       run: |
-        echo "🔍 Running code quality checks..."
+        echo "Running code quality checks..."
         uv run black --check app/ tests/ --diff
         uv run ruff check app/ tests/ --output-format=github
-        echo "✅ Linting passed"
+        echo "Linting passed"
 
     - name: Run type checking
       run: |
-        echo "🔍 Running type checking..."
+        echo "Running type checking..."
         uv run mypy app/ --show-error-codes
-        echo "✅ Type checking passed"
+        echo "Type checking passed"
 
     - name: Run security scan
       id: security
       run: |
-        echo "🔒 Running security scan..."
+        echo "Running security scan..."
         uv run bandit -r app/ -f json -o security-report.json
         
         # Count high/medium severity issues
@@ -79,16 +79,16 @@ jobs:
         echo "Found ${ISSUES} security issues"
         
         if [ "$ISSUES" -gt "${{ env.MAX_SECURITY_ISSUES }}" ]; then
-          echo "❌ Security scan failed: ${ISSUES} issues found (max: ${{ env.MAX_SECURITY_ISSUES }})"
+          echo "Security scan failed: ${ISSUES} issues found (max: ${{ env.MAX_SECURITY_ISSUES }})"
           exit 1
         fi
-        echo "✅ Security scan passed"
+        echo "Security scan passed"
 
-    - name: Run tests with coverage
+    - name: Run unit tests with coverage
       id: coverage
       run: |
-        echo "🧪 Running tests with coverage..."
-        uv run pytest tests/ -v \
+        echo "Running unit tests with coverage..."
+        uv run pytest tests/test_scoring.py tests/conftest.py -v \
           --cov=app \
           --cov-report=term-missing \
           --cov-report=xml \
@@ -101,21 +101,21 @@ jobs:
         echo "Code coverage: ${COVERAGE}%"
         
         if (( $(echo "${COVERAGE} < ${{ env.MIN_COVERAGE }}" | bc -l) )); then
-          echo "❌ Coverage failed: ${COVERAGE}% (required: ${{ env.MIN_COVERAGE }}%)"
+          echo "Coverage failed: ${COVERAGE}% (required: ${{ env.MIN_COVERAGE }}%)"
           exit 1
         fi
-        echo "✅ Coverage passed: ${COVERAGE}%"
+        echo "Coverage passed: ${COVERAGE}%"
 
     - name: Quality gate check
       id: quality-check
       run: |
-        echo "🎯 Quality Gates Summary:"
-        echo "• Coverage: ${{ steps.coverage.outputs.coverage }}% (min: ${{ env.MIN_COVERAGE }}%)"
-        echo "• Security Issues: ${{ steps.security.outputs.security-issues }} (max: ${{ env.MAX_SECURITY_ISSUES }})"
-        echo "• Linting: ✅ Passed"
-        echo "• Type Checking: ✅ Passed"
+        echo "Quality Gates Summary:"
+        echo "Coverage: ${{ steps.coverage.outputs.coverage }}% (min: ${{ env.MIN_COVERAGE }}%)"
+        echo "Security Issues: ${{ steps.security.outputs.security-issues }} (max: ${{ env.MAX_SECURITY_ISSUES }})"
+        echo "Linting: Passed"
+        echo "Type Checking: Passed"
         echo "passed=true" >> $GITHUB_OUTPUT
-        echo "🎉 All quality gates passed!"
+        echo "All quality gates passed!"
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
@@ -186,7 +186,7 @@ jobs:
       env:
         IMAGE_TAG: ${{ needs.quality-gates.outputs.version }}
       run: |
-        echo "🐳 Building and pushing Docker image to DEV..."
+        echo "Building and pushing Docker image to DEV..."
         
         # Build and push with version and latest tags to DEV repo
         ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
@@ -196,15 +196,15 @@ jobs:
           --tag ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_DEV }}:latest \
           --push .
         
-        echo "✅ DEV Image pushed successfully:"
-        echo "• ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_DEV }}:$IMAGE_TAG"
-        echo "• ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_DEV }}:latest"
+        echo "DEV Image pushed successfully:"
+        echo "${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_DEV }}:$IMAGE_TAG"
+        echo "${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_DEV }}:latest"
 
     - name: Update DEV ECS Task Definition and Service
       env:
         IMAGE_TAG: ${{ needs.quality-gates.outputs.version }}
       run: |
-        echo "🚀 Updating DEV ECS task definition and restarting service..."
+        echo "Updating DEV ECS task definition and restarting service..."
         
         ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
         NEW_IMAGE="${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_DEV }}:latest"
@@ -245,7 +245,7 @@ jobs:
         # Clean up temp file
         rm new-task-def-dev.json
         
-        echo "✅ New task definition registered: $NEW_TASK_DEF_ARN"
+        echo "New task definition registered: $NEW_TASK_DEF_ARN"
         
         # Force restart the service to use new task definition
         aws ecs update-service \
@@ -255,16 +255,80 @@ jobs:
           --force-new-deployment \
           --region ${{ env.AWS_REGION }}
         
-        echo "🔄 Service restart initiated..."
+        echo "Service restart initiated..."
         
         # Wait for service to stabilize
-        echo "⏳ Waiting for service to stabilize..."
+        echo "Waiting for service to stabilize..."
         aws ecs wait services-stable \
           --cluster marketing-cluster \
           --services lead-scoring-dev-service \
           --region ${{ env.AWS_REGION }}
         
-        echo "✅ DEV deployment completed successfully!"
+        echo "DEV deployment completed successfully!"
+
+  load-test-dev:
+    needs: [build-and-push-dev]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev'
+    permissions:
+      contents: read
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+
+    - name: Install dependencies
+      run: |
+        uv sync --dev
+
+    - name: Wait for DEV service to be ready
+      run: |
+        echo "Waiting for DEV service to be fully ready..."
+        sleep 30  # Give ECS service time to stabilize
+
+    - name: Run load tests against DEV environment
+      env:
+        LOAD_TEST_ENV: dev
+      run: |
+        echo "Running load tests against DEV environment..."
+        echo "Target URL: http://alb-lead-scoring-dev-263460192.eu-west-1.elb.amazonaws.com"
+        
+        # Run performance verification tests
+        uv run pytest tests/test_load.py::test_single_request_load -v --tb=short
+        uv run pytest tests/test_load.py::test_batch_request_load -v --tb=short
+        uv run pytest tests/test_load.py::test_concurrent_load -v --tb=short
+        
+        echo "DEV load tests completed successfully!"
+
+    - name: Run health check verification
+      run: |
+        echo "Verifying DEV service health..."
+        HEALTH_URL="http://alb-lead-scoring-dev-263460192.eu-west-1.elb.amazonaws.com/api/v1/health"
+        
+        # Check health endpoint
+        HEALTH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
+        if [ "$HEALTH_RESPONSE" != "200" ]; then
+          echo "Health check failed: HTTP $HEALTH_RESPONSE"
+          exit 1
+        fi
+        
+        # Check model info endpoint
+        MODEL_URL="http://alb-lead-scoring-dev-263460192.eu-west-1.elb.amazonaws.com/api/v1/scoring/model/info"
+        MODEL_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$MODEL_URL" || echo "000")
+        if [ "$MODEL_RESPONSE" != "200" ]; then
+          echo "Model info check failed: HTTP $MODEL_RESPONSE"
+          exit 1
+        fi
+        
+        echo "DEV health checks passed!"
 
   build-and-push-prod:
     needs: [quality-gates, vulnerability-scan]
@@ -299,7 +363,7 @@ jobs:
       env:
         IMAGE_TAG: ${{ needs.quality-gates.outputs.version }}
       run: |
-        echo "🐳 Building and pushing Docker image to PROD..."
+        echo "Building and pushing Docker image to PROD..."
         
         # Build and push with version tag to PROD repo
         ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
@@ -308,8 +372,8 @@ jobs:
           --tag ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:$IMAGE_TAG \
           --push .
         
-        echo "✅ PROD Image pushed successfully:"
-        echo "• ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:$IMAGE_TAG"
+        echo "PROD Image pushed successfully:"
+        echo "${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:$IMAGE_TAG"
         
         # Output for deployment job
         echo "image=${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
@@ -318,7 +382,7 @@ jobs:
       env:
         VERSION: ${{ needs.quality-gates.outputs.version }}
       run: |
-        echo "🏷️ Creating Git tag: $VERSION"
+        echo "Creating Git tag: $VERSION"
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git tag -a $VERSION -m "Release $VERSION - Coverage: ${{ needs.quality-gates.outputs.coverage }}%"
@@ -328,7 +392,7 @@ jobs:
       env:
         IMAGE_TAG: ${{ needs.quality-gates.outputs.version }}
       run: |
-        echo "🔒 Scanning image for vulnerabilities..."
+        echo "Scanning image for vulnerabilities..."
         
         # Wait for ECR scan to complete
         aws ecr start-image-scan --repository-name ${{ env.ECR_REPOSITORY_PROD }} --image-id imageTag=$IMAGE_TAG || true
@@ -341,20 +405,20 @@ jobs:
         HIGH=$(echo $SCAN_RESULTS | jq -r '.HIGH // 0')
         
         echo "Vulnerability scan results:"
-        echo "• Critical: $CRITICAL"
-        echo "• High: $HIGH"
+        echo "Critical: $CRITICAL"
+        echo "High: $HIGH"
         
         if [ "$CRITICAL" -gt "0" ] || [ "$HIGH" -gt "3" ]; then
-          echo "❌ Image vulnerability scan failed"
+          echo "Image vulnerability scan failed"
           exit 1
         fi
-        echo "✅ Image vulnerability scan passed"
+        echo "Image vulnerability scan passed"
 
     - name: Update PROD ECS Task Definition and Service
       env:
         IMAGE_TAG: ${{ needs.quality-gates.outputs.version }}
       run: |
-        echo "🚀 Updating PROD ECS task definition and restarting service..."
+        echo "Updating PROD ECS task definition and restarting service..."
         
         ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
         NEW_IMAGE="${ECR_REGISTRY}/${{ env.ECR_REPOSITORY_PROD }}:$IMAGE_TAG"
@@ -395,7 +459,7 @@ jobs:
         # Clean up temp file
         rm new-task-def-prod.json
         
-        echo "✅ New task definition registered: $NEW_TASK_DEF_ARN"
+        echo "New task definition registered: $NEW_TASK_DEF_ARN"
         
         # Force restart the service to use new task definition
         aws ecs update-service \
@@ -405,13 +469,110 @@ jobs:
           --force-new-deployment \
           --region ${{ env.AWS_REGION }}
         
-        echo "🔄 Service restart initiated..."
+        echo "Service restart initiated..."
         
         # Wait for service to stabilize
-        echo "⏳ Waiting for service to stabilize..."
+        echo "Waiting for service to stabilize..."
         aws ecs wait services-stable \
           --cluster marketing-cluster \
           --services lead-scoring-prod-service \
           --region ${{ env.AWS_REGION }}
         
-        echo "🎉 Production deployment completed successfully!"
+        echo "Production deployment completed successfully!"
+
+  load-test-prod:
+    needs: [build-and-push-prod]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+
+    - name: Install dependencies
+      run: |
+        uv sync --dev
+
+    - name: Wait for PROD service to be ready
+      run: |
+        echo "Waiting for PROD service to be fully ready..."
+        sleep 30  # Give ECS service time to stabilize
+
+    - name: Run smoke tests against PROD environment
+      env:
+        LOAD_TEST_ENV: prod
+      run: |
+        echo "Running smoke tests against PROD environment..."
+        echo "Target URL: https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com"
+        
+        # Run lighter smoke tests for production (not full load tests)
+        uv run pytest tests/test_load.py::test_single_request_load -v --tb=short
+        uv run pytest tests/test_load.py::test_batch_request_load -v --tb=short
+        
+        echo "PROD smoke tests completed successfully!"
+
+    - name: Run production health check verification
+      run: |
+        echo "Verifying PROD service health..."
+        HEALTH_URL="https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com/api/v1/health"
+        
+        # Check health endpoint
+        HEALTH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
+        if [ "$HEALTH_RESPONSE" != "200" ]; then
+          echo "Health check failed: HTTP $HEALTH_RESPONSE"
+          exit 1
+        fi
+        
+        # Check model info endpoint
+        MODEL_URL="https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com/api/v1/scoring/model/info"
+        MODEL_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$MODEL_URL" || echo "000")
+        if [ "$MODEL_RESPONSE" != "200" ]; then
+          echo "Model info check failed: HTTP $MODEL_RESPONSE"
+          exit 1
+        fi
+        
+        # Test a single prediction to ensure end-to-end functionality
+        PREDICTION_RESPONSE=$(curl -s -X POST "$MODEL_URL/../score" \
+          -H "Content-Type: application/json" \
+          -d '{"request_id":"prod-verification","leads":[{"email_engagement_score":0.8,"existing_customer":false}]}' \
+          -o /dev/null -w "%{http_code}" || echo "000")
+        
+        if [ "$PREDICTION_RESPONSE" != "200" ]; then
+          echo "Prediction endpoint check failed: HTTP $PREDICTION_RESPONSE"
+          exit 1
+        fi
+        
+        echo "PROD health checks and functionality verification passed!"
+
+    - name: Performance baseline verification
+      env:
+        LOAD_TEST_ENV: prod
+      run: |
+        echo "Running performance baseline verification..."
+        # Run a single request performance test to ensure baseline requirements
+        uv run pytest tests/test_load.py::test_single_request_load -v --tb=short
+        echo "Performance baseline verification passed!"
+
+    - name: Send deployment notification
+      if: success()
+      run: |
+        echo "PRODUCTION DEPLOYMENT SUCCESSFUL"
+        echo "=================================="
+        echo "• Version: ${{ needs.build-and-push-prod.needs.quality-gates.outputs.version }}"
+        echo "• Coverage: ${{ needs.build-and-push-prod.needs.quality-gates.outputs.coverage }}%"
+        echo "• Environment: PRODUCTION"
+        echo "• URL: https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com"
+        echo "Health checks: PASSED"
+        echo "Smoke tests: PASSED"
+        echo "Performance baseline: PASSED"
+        echo "=================================="

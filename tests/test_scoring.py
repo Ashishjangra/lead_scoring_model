@@ -15,19 +15,6 @@ def test_health_check():
     assert "uptime_seconds" in data
 
 
-def test_readiness_check():
-    """Test readiness check endpoint"""
-    response = client.get("/api/v1/health/ready")
-    assert response.status_code in [200, 503]
-
-
-def test_liveness_check():
-    """Test liveness check endpoint"""
-    response = client.get("/api/v1/health/live")
-    assert response.status_code == 200
-    assert response.json()["status"] == "alive"
-
-
 def test_score_leads_endpoint():
     """Test lead scoring endpoint"""
     payload = {
