@@ -296,7 +296,7 @@ jobs:
 
     - name: Run load tests against DEV environment
       env:
-        ENV: dev
+        LOAD_TEST_ENV: dev
       run: |
         echo "Running load tests against DEV environment..."
         echo "Target URL: https://alb-lead-scoring-dev-263460192.eu-west-1.elb.amazonaws.com"
@@ -510,7 +510,7 @@ jobs:
 
     - name: Run smoke tests against PROD environment
       env:
-        ENV: prod
+        LOAD_TEST_ENV: prod
       run: |
         echo "Running smoke tests against PROD environment..."
         echo "Target URL: https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com"
@@ -556,7 +556,7 @@ jobs:
 
     - name: Performance baseline verification
       env:
-        ENV: prod
+        LOAD_TEST_ENV: prod
       run: |
         echo "Running performance baseline verification..."
         # Run a single request performance test to ensure baseline requirements

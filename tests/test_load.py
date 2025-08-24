@@ -153,7 +153,13 @@ class LoadTester:
     def __init__(self, base_url: str = None):
         # Environment-based URL configuration
         if base_url is None:
-            env = os.getenv("ENV", "dev").lower()
+            # Check for external ENV override first (for CI/CD)
+            external_env = os.environ.get("LOAD_TEST_ENV") or os.environ.get("ENV")
+            if external_env and external_env != "test":
+                env = external_env.lower()
+            else:
+                env = "debug"  # fallback for local/debug environments
+            
             if env == "prod":
                 base_url = (
                     "https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com"
@@ -164,7 +170,7 @@ class LoadTester:
                 )
             else:
                 base_url = "http://localhost:8000"  # fallback for local testing
-
+        
         self.base_url = base_url
         self.session: aiohttp.ClientSession | None = None
 
@@ -419,7 +425,7 @@ if __name__ == "__main__":
     """Run load test directly"""
 
     async def run_load_test():
-        env = os.getenv("ENV", "local")
+        env = os.getenv("ENV", "debug")
         print("Starting Lead Scoring API Load Test")
         print("=" * 50)
         print(f"Environment: {env.upper()}")
