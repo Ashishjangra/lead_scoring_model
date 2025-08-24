@@ -155,12 +155,16 @@ class LoadTester:
         if base_url is None:
             env = os.getenv("ENV", "dev").lower()
             if env == "prod":
-                base_url = "https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com"
+                base_url = (
+                    "https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com"
+                )
             elif env == "dev":
-                base_url = "https://alb-lead-scoring-dev-263460192.eu-west-1.elb.amazonaws.com"
+                base_url = (
+                    "https://alb-lead-scoring-dev-263460192.eu-west-1.elb.amazonaws.com"
+                )
             else:
                 base_url = "http://localhost:8000"  # fallback for local testing
-        
+
         self.base_url = base_url
         self.session: aiohttp.ClientSession | None = None
 
@@ -419,7 +423,7 @@ if __name__ == "__main__":
         print("Starting Lead Scoring API Load Test")
         print("=" * 50)
         print(f"Environment: {env.upper()}")
-        
+
         async with LoadTester() as tester:
             print(f"Testing URL: {tester.base_url}")
             # Quick performance test
