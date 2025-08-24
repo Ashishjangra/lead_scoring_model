@@ -559,35 +559,9 @@ jobs:
         ENV: prod
       run: |
         echo "Running performance baseline verification..."
-        # Run a quick performance check to ensure the system meets baseline requirements
-        python -c "
-import asyncio
-import sys
-import os
-sys.path.insert(0, 'tests')
-from test_load import LoadTester, LoadTestData
-
-async def baseline_test():
-    async with LoadTester() as tester:
-        # Quick 5-request performance test
-        leads = LoadTestData.generate_batch(10)
-        result = await tester.score_leads(leads, 'prod-baseline-test')
-        
-        print(f'Response Time: {result[\"response_time_ms\"]:.1f}ms')
-        print(f'Status Code: {result[\"status_code\"]}')
-        
-        # Ensure baseline performance
-        if result['status_code'] != 200:
-            print('Baseline test failed: Non-200 response')
-            sys.exit(1)
-        if result['response_time_ms'] > 10000:  # 10 second threshold for prod
-            print('Baseline test failed: Response time too high')"
-            sys.exit(1)
-        
-        print('Performance baseline verification passed!')
-
-asyncio.run(baseline_test())
-        "
+        # Run a single request performance test to ensure baseline requirements
+        uv run pytest tests/test_load.py::test_single_request_load -v --tb=short
+        echo "Performance baseline verification passed!"
 
     - name: Send deployment notification
       if: success()
