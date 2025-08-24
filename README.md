@@ -1,14 +1,13 @@
 # Lead Scoring API
 
-A production-ready FastAPI service for scoring B2B leads using XGBoost, designed for enterprise marketing team requirements with comprehensive CI/CD pipeline, load testing, and data lake integration.
+A fast API service that scores business leads to help marketing teams identify which leads are most likely to become customers. Uses machine learning and includes automated testing and deployment.
 
 ## Features
 
-### **Core Capabilities**
-- **High Performance**: Handles ~300 requests/second with sub-1-second response times
-- **Scalable Architecture**: Built with FastAPI and async processing with 50+ feature support
-- **ML-Optimized**: XGBoost model with comprehensive feature engineering (16 core + 34 custom features)
-- **Batch Processing**: Support for 1-500 leads per request with intelligent batching
+### **What It Does**
+- **Fast Processing**: Can handle 300 requests per second, responds in less than 1 second
+- **Smart Scoring**: Uses machine learning to analyze 50 different pieces of information about each lead
+- **Batch Processing**: Can score 1 to 500 leads at once
 
 ### **Production Infrastructure**
 - **Container Ready**: Docker containerization with multi-stage builds and health checks
@@ -259,20 +258,6 @@ ENV=prod pytest tests/test_load.py::test_single_request_load -v
 - Performance baseline (<10s threshold)
 ```
 
-### **Performance Benchmarks**
-
-**Development Targets:**
-- Success Rate: ≥95%
-- Average Response Time: <2 seconds
-- P95 Response Time: <5 seconds
-- Throughput: ≥2 requests/second
-- Concurrent Capacity: 5+ concurrent requests
-
-**Production Baselines:**
-- Success Rate: ≥90% (under stress)
-- Single Request: <1 second
-- Batch Processing: <10 seconds
-- Health Check Response: <500ms
 
 ### **Smoke Test Data Safety**
 
@@ -319,7 +304,7 @@ WHERE request_id IN ('prod-verification', 'prod-baseline-test');
 
 **2. Container Security:**
 ```yaml
-- Multi-stage Docker builds with distroless images
+- Secure Docker builds with minimal container images (no extra operating system components)
 - Container vulnerability scanning with ECR
 - Image signing and provenance tracking
 - Zero critical vulnerabilities policy
@@ -343,7 +328,7 @@ WHERE request_id IN ('prod-verification', 'prod-baseline-test');
 - Data variety testing with realistic correlation patterns
 
 **Target URLs:**
-- DEV Environment: `https://alb-lead-scoring-dev-263460192.eu-west-1.elb.amazonaws.com`
+- DEV Environment: `http://alb-lead-scoring-dev-263460192.eu-west-1.elb.amazonaws.com`
 
 #### **Production Branch (`main` → PROD Environment)**
 
@@ -360,7 +345,7 @@ WHERE request_id IN ('prod-verification', 'prod-baseline-test');
 - Performance baseline validation (<10s)
 
 **Target URLs:**
-- PROD Environment: `https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com`
+- PROD Environment: `http://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com`
 
 ### **Pipeline Orchestration**
 
@@ -518,8 +503,8 @@ external_env = os.environ.get("LOAD_TEST_ENV") or os.environ.get("ENV")
 ```
 
 **URL Mapping:**
-- **`LOAD_TEST_ENV=prod`**: `https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com`
-- **`LOAD_TEST_ENV=dev`**: `https://alb-lead-scoring-dev-263460192.eu-west-1.elb.amazonaws.com`
+- **`LOAD_TEST_ENV=prod`**: `http://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com`
+- **`LOAD_TEST_ENV=dev`**: `http://alb-lead-scoring-dev-263460192.eu-west-1.elb.amazonaws.com`
 - **`LOAD_TEST_ENV=local`**: `http://localhost:8000`
 
 **CI/CD Usage:**

@@ -513,7 +513,7 @@ jobs:
         LOAD_TEST_ENV: prod
       run: |
         echo "Running smoke tests against PROD environment..."
-        echo "Target URL: https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com"
+        echo "Target URL: http://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com"
         
         # Run lighter smoke tests for production (not full load tests)
         uv run pytest tests/test_load.py::test_single_request_load -v --tb=short
@@ -524,7 +524,7 @@ jobs:
     - name: Run production health check verification
       run: |
         echo "Verifying PROD service health..."
-        HEALTH_URL="https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com/api/v1/health"
+        HEALTH_URL="http://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com/api/v1/health"
         
         # Check health endpoint
         HEALTH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
@@ -534,7 +534,7 @@ jobs:
         fi
         
         # Check model info endpoint
-        MODEL_URL="https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com/api/v1/scoring/model/info"
+        MODEL_URL="http://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com/api/v1/scoring/model/info"
         MODEL_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$MODEL_URL" || echo "000")
         if [ "$MODEL_RESPONSE" != "200" ]; then
           echo "Model info check failed: HTTP $MODEL_RESPONSE"
@@ -571,7 +571,7 @@ jobs:
         echo "• Version: ${{ needs.build-and-push-prod.needs.quality-gates.outputs.version }}"
         echo "• Coverage: ${{ needs.build-and-push-prod.needs.quality-gates.outputs.coverage }}%"
         echo "• Environment: PRODUCTION"
-        echo "• URL: https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com"
+        echo "• URL: http://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com"
         echo "Health checks: PASSED"
         echo "Smoke tests: PASSED"
         echo "Performance baseline: PASSED"
