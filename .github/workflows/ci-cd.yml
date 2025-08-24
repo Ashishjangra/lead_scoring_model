@@ -542,7 +542,8 @@ jobs:
         fi
         
         # Test a single prediction to ensure end-to-end functionality
-        PREDICTION_RESPONSE=$(curl -s -X POST "$MODEL_URL/../score" \
+        SCORE_URL="http://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com/api/v1/scoring/score"
+        PREDICTION_RESPONSE=$(curl -s -X POST "$SCORE_URL" \
           -H "Content-Type: application/json" \
           -d '{"request_id":"prod-verification","leads":[{"email_engagement_score":0.8,"existing_customer":false}]}' \
           -o /dev/null -w "%{http_code}" || echo "000")
