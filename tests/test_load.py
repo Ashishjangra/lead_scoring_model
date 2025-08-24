@@ -159,7 +159,7 @@ class LoadTester:
                 env = external_env.lower()
             else:
                 env = "debug"  # fallback for local/debug environments
-            
+
             if env == "prod":
                 base_url = (
                     "https://alb-lead-scoring-1394767465.eu-west-1.elb.amazonaws.com"
@@ -170,7 +170,7 @@ class LoadTester:
                 )
             else:
                 base_url = "http://localhost:8000"  # fallback for local testing
-        
+
         self.base_url = base_url
         self.session: aiohttp.ClientSession | None = None
 
