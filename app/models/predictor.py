@@ -139,10 +139,16 @@ class LeadScoringPredictor:
         }
 
         # Calculate days since last interaction vectorized
-        now = pd.Timestamp.now()
+        now = pd.Timestamp.now(tz="UTC")
         data["days_since_last_interaction"] = [
             (
-                max(0, (now - pd.Timestamp(lead.last_campaign_interaction)).days)
+                max(
+                    0,
+                    (
+                        now
+                        - pd.Timestamp(lead.last_campaign_interaction).tz_convert("UTC")
+                    ).days,
+                )
                 if lead.last_campaign_interaction
                 else DEFAULT_DAYS_SINCE_INTERACTION
             )

@@ -7,7 +7,7 @@ import asyncio
 import os
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import aiohttp
@@ -119,7 +119,7 @@ class LoadTestData:
 
         # Generate realistic interaction date
         days_ago = random.randint(0, 365)
-        last_interaction = datetime.now() - timedelta(days=days_ago)
+        last_interaction = datetime.now(timezone.utc) - timedelta(days=days_ago)
 
         return {
             "company_size": company_size,
@@ -395,7 +395,7 @@ async def test_data_variety():
                     "account_employees": 10000,
                     "existing_customer": True,
                     "last_campaign_interaction": (
-                        datetime.now() - timedelta(days=1)
+                        datetime.now(timezone.utc) - timedelta(days=1)
                     ).isoformat(),
                     "custom_features": {
                         f"custom_feature_{i}": random.uniform(0, 100)
